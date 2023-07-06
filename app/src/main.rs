@@ -103,7 +103,7 @@ struct State {
     window: Window,
     render_pipeline: wgpu::RenderPipeline,
     render_bind_group: wgpu::BindGroup,
-    dimensions_buffer: UniformBuffer,
+    _dimensions_buffer: UniformBuffer,
 }
 
 impl State {
@@ -272,7 +272,7 @@ impl State {
             size,
             render_pipeline,
             render_bind_group,
-            dimensions_buffer,
+            _dimensions_buffer: dimensions_buffer,
         }
     }
 
