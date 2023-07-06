@@ -2,7 +2,8 @@
 
 members = [
     "ornament",
-    #"load",
+    "load",
+    "util",
     "examples",
     "app",
     "console-app"

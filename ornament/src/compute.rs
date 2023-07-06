@@ -110,6 +110,7 @@ impl Unit {
                 bytemuck::cast_slice(&[dynamic_state]),
                 0,
                 Some("ornament_dynamic_state_buffer"),
+                false,
             );
 
             let constant_state_buffer = UniformBuffer::new_from_bytes(
@@ -117,6 +118,7 @@ impl Unit {
                 bytemuck::cast_slice(&[gpu_structs::ConstantState::from(settings)]),
                 1,
                 Some("ornament_constant_state_buffer"),
+                false,
             );
 
             let camera_buffer = UniformBuffer::new_from_bytes(
@@ -124,6 +126,7 @@ impl Unit {
                 bytemuck::cast_slice(&[gpu_structs::Camera::from(&scene.camera)]),
                 2,
                 Some("ornament_camera_buffer"),
+                false,
             );
 
             let bind_group_layout =
@@ -388,7 +391,7 @@ impl Buffer {
     ) -> Self {
         let handle = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             contents: bytes,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            usage: wgpu::BufferUsages::STORAGE,
             label,
         });
 
@@ -400,7 +403,7 @@ impl Buffer {
 
     pub fn new(device: &wgpu::Device, size: u64, binding_idx: u32, label: Option<&str>) -> Self {
         let handle = device.create_buffer(&wgpu::BufferDescriptor {
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            usage: wgpu::BufferUsages::STORAGE,
             size,
             label,
             mapped_at_creation: false,
@@ -473,10 +476,16 @@ impl UniformBuffer {
         bytes: &[u8],
         binding_idx: u32,
         label: Option<&str>,
+        read_only: bool,
     ) -> Self {
+        let mut usage = wgpu::BufferUsages::UNIFORM;
+        if !read_only {
+            usage = usage | wgpu::BufferUsages::COPY_DST;
+        }
+
         let handle = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             contents: bytes,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            usage,
             label,
         });
 

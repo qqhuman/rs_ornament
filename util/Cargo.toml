@@ -1,5 +1,5 @@
 [package]
-name = "console-app"
+name = "util"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,7 +7,3 @@ edition = "2021"
 
 [dependencies]
 wgpu = "0.16"
-pollster = "0.3"
-ornament = { path = "../ornament" }
-examples = { path = "../examples" }
-util = { path = "../util" }

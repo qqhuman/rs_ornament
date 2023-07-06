@@ -1,9 +1,7 @@
 mod controllers;
-mod util;
 
 use std::rc::Rc;
 
-use ornament::{PathTracer, Scene, Settings};
 use util::{FpsCounter, UniformBuffer};
 use winit::{
     dpi::PhysicalSize,
@@ -14,12 +12,9 @@ use winit::{
 
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
+const DEPTH: u32 = 10;
 
 fn main() {
-    run_window_app();
-}
-
-pub fn run_window_app() {
     pollster::block_on(run());
 }
 
@@ -93,7 +88,7 @@ pub async fn run() {
 }
 
 struct State {
-    path_tracer: PathTracer,
+    path_tracer: ornament::Context,
     camera_controller: controllers::Camera,
     surface: wgpu::Surface,
     device: Rc<wgpu::Device>,
@@ -102,12 +97,12 @@ struct State {
     size: winit::dpi::PhysicalSize<u32>,
     window: Window,
     render_pipeline: wgpu::RenderPipeline,
-    render_bind_group: wgpu::BindGroup,
+    bind_group: wgpu::BindGroup,
     _dimensions_buffer: UniformBuffer,
 }
 
 impl State {
-    async fn new(window: Window, scene: Scene) -> Self {
+    async fn new(window: Window, scene: ornament::Scene) -> Self {
         let size = window.inner_size();
 
         // The instance is a handle to our GPU
@@ -160,10 +155,10 @@ impl State {
 
         let device = Rc::new(device);
         let queue = Rc::new(queue);
-        let path_tracer = PathTracer::from_device_and_queue(
+        let path_tracer = ornament::Context::from_device_and_queue(
             device.clone(),
             queue.clone(),
-            Settings::new(size.width, size.height, 10),
+            ornament::Settings::new(size.width, size.height, DEPTH),
             scene,
         );
 
@@ -189,9 +184,7 @@ impl State {
         //let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(
-                include_str!("texture.wgsl").into(),
-            ),
+            source: wgpu::ShaderSource::Wgsl(include_str!("texture.wgsl").into()),
         });
 
         let dimensions_buffer = UniformBuffer::new_from_bytes(
@@ -201,31 +194,29 @@ impl State {
             Some("dimensions_buffer"),
         );
 
-        let render_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Render bind group layout"),
-                entries: &[
-                    path_tracer.target_layout(0, wgpu::ShaderStages::FRAGMENT, true),
-                    dimensions_buffer.layout(wgpu::ShaderStages::FRAGMENT),
-                ],
-            });
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Render bind group layout"),
+            entries: &[
+                path_tracer.target_layout(0, wgpu::ShaderStages::FRAGMENT, true),
+                dimensions_buffer.layout(wgpu::ShaderStages::FRAGMENT),
+            ],
+        });
 
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&render_bind_group_layout],
-                push_constant_ranges: &[],
-            });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[],
+        });
 
-        let render_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Render bind group"),
-            layout: &render_bind_group_layout,
+            layout: &bind_group_layout,
             entries: &[path_tracer.target_binding(0), dimensions_buffer.binding()],
         });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
+            layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
@@ -271,7 +262,7 @@ impl State {
             config,
             size,
             render_pipeline,
-            render_bind_group,
+            bind_group,
             _dimensions_buffer: dimensions_buffer,
         }
     }
@@ -330,7 +321,7 @@ impl State {
         });
 
         render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_bind_group(0, &self.render_bind_group, &[]);
+        render_pass.set_bind_group(0, &self.bind_group, &[]);
         render_pass.draw(0..3, 0..1);
         drop(render_pass);
 

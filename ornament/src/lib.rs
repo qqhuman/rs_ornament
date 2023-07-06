@@ -16,13 +16,45 @@ mod math;
 pub type RcCell<T> = Rc<RefCell<T>>;
 pub type Color = cgmath::Point3<f32>;
 
-pub struct PathTracer {
+pub struct Context {
     compute_unit: compute::Unit,
     pub scene: Scene,
     pub settings: Settings,
 }
 
-impl PathTracer {
+impl Context {
+    pub async fn new(
+        settings: Settings,
+        scene: Scene,
+        backends: wgpu::Backends,
+        limits: wgpu::Limits,
+    ) -> Result<Context, wgpu::RequestDeviceError> {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends,
+            dx12_shader_compiler: Default::default(),
+        });
+
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: None,
+                force_fallback_adapter: false,
+            })
+            .await
+            .unwrap();
+        let device_descriptor = wgpu::DeviceDescriptor {
+            features: wgpu::Features::empty(),
+            limits,
+            label: None,
+        };
+        adapter
+            .request_device(&device_descriptor, None)
+            .await
+            .map(|(device, queue)| {
+                Self::from_device_and_queue(Rc::new(device), Rc::new(queue), settings, scene)
+            })
+    }
+
     pub fn from_device_and_queue(
         device: Rc<wgpu::Device>,
         queue: Rc<wgpu::Queue>,
@@ -64,6 +96,7 @@ impl PathTracer {
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("Path Tracer Encoder"),
                 });
+
         self.render_with_encoder(&mut encoder);
         self.compute_unit
             .queue

@@ -1,4 +1,4 @@
-use winit::event::{ElementState, WindowEvent, KeyboardInput, VirtualKeyCode};
+use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 pub struct Camera {
     speed: f32,

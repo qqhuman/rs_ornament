@@ -1,7 +1,7 @@
 use cgmath::EuclideanSpace;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
-use ornament::{Camera, Material, Mesh, MeshInstance, RcCell, Scene, Sphere, Color};
+use ornament::{Camera, Color, Material, Mesh, MeshInstance, RcCell, Scene, Sphere};
 
 fn random_color(rng: &mut StdRng) -> Color {
     Color::new(rng.gen(), rng.gen(), rng.gen())

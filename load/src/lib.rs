@@ -1,8 +1,6 @@
 use cgmath::{Array, InnerSpace, Transform};
 
-use ornament::{
-    Material, Mesh, RcCell,
-};
+use ornament::{Material, Mesh, RcCell};
 
 pub fn point3_min(a: cgmath::Point3<f32>, b: cgmath::Point3<f32>) -> cgmath::Point3<f32> {
     cgmath::Point3::new(a.x.min(b.x), a.y.min(b.y), a.z.min(b.z))
