@@ -31,9 +31,22 @@ async fn run() {
     .await
     .unwrap();
 
+    path_tracer.set_flip_y(true);
+
     for _ in 0..100 {
         fps_counter.start_frame();
         path_tracer.render();
         fps_counter.end_frame();
     }
+
+    let data = path_tracer.target_get_data().await;
+    let floats: &[f32] =
+        unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f32, data.len() / 4) };
+    let bytes = floats
+        .iter()
+        .map(|f| f32::clamp(f * 255.0, 0.0, 255.0) as u8)
+        .collect();
+    let buffer =
+        image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(WIDTH, HEIGHT, bytes).unwrap();
+    buffer.save("image.png").unwrap();
 }

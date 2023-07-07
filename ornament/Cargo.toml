@@ -10,3 +10,4 @@ wgpu = "0.16"
 bytemuck = { version = "1.12", features = [ "derive" ] }
 rand = "0.8.5"
 cgmath = "0.18"
+futures-intrusive = "^0.5"

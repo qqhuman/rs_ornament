@@ -187,9 +187,10 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(include_str!("texture.wgsl").into()),
         });
 
+        let (width, height) = path_tracer.get_resolution();
         let dimensions_buffer = UniformBuffer::new_from_bytes(
             &device,
-            bytemuck::cast_slice(&[path_tracer.settings.width, path_tracer.settings.height]),
+            bytemuck::cast_slice(&[width, height]),
             1,
             Some("dimensions_buffer"),
         );

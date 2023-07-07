@@ -29,7 +29,7 @@ fn main(@builtin(global_invocation_id) invocation_id : vec3<u32>) {
 
         // store data
         rgb = clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0));
-        let rgba = vec4<f32>(rgb, 1.0);
+        var rgba = vec4<f32>(rgb, 1.0);
         var accumulated_rgba: vec4<f32>;
         if dynamic_state.current_iteration > 1.0 {
             accumulated_rgba = accumulation_buffer[invocation_id.x] + rgba;
@@ -38,7 +38,14 @@ fn main(@builtin(global_invocation_id) invocation_id : vec3<u32>) {
         }
         
         accumulation_buffer[invocation_id.x] = accumulated_rgba;
-        framebuffer[invocation_id.x] = sqrt(accumulated_rgba / dynamic_state.current_iteration); // gamma=2.0.
+
+        rgba = sqrt(accumulated_rgba / dynamic_state.current_iteration); // gamma=2.0.
+        if constant_state.flip_y < 1u {
+            framebuffer[invocation_id.x] = rgba;
+        } else {
+            let y_flipped = dimensions.y - xy.y - 1u;
+            framebuffer[dimensions.x * y_flipped + xy.x] = rgba;
+        }
         save_rng_state(invocation_id.x);
     }
 }

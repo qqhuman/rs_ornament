@@ -18,8 +18,8 @@ pub type Color = cgmath::Point3<f32>;
 
 pub struct Context {
     compute_unit: compute::Unit,
+    settings: Settings,
     pub scene: Scene,
-    pub settings: Settings,
 }
 
 impl Context {
@@ -85,8 +85,36 @@ impl Context {
         self.compute_unit.target_buffer.binding(binding)
     }
 
+    pub fn target_get_data(&self) -> impl std::future::Future<Output = wgpu::BufferView<'_>> {
+        self.compute_unit.target_buffer.get_data()
+    }
+
     pub fn clear_buffer(&mut self) {
         self.compute_unit.reset();
+    }
+
+    pub fn set_flip_y(&mut self, flip_y: bool) {
+        self.settings.set_flip_y(flip_y);
+    }
+
+    pub fn get_flip_y(&self) -> bool {
+        self.settings.get_flip_y()
+    }
+
+    pub fn set_depth(&mut self, depth: u32) {
+        self.settings.set_depth(depth);
+    }
+
+    pub fn get_depth(&self) -> u32 {
+        self.settings.get_depth()
+    }
+
+    pub fn set_resolution(&mut self, width: u32, height: u32) {
+        self.settings.set_resolution(width, height);
+    }
+
+    pub fn get_resolution(&self) -> (u32, u32) {
+        self.settings.get_resolution()
     }
 
     pub fn render(&mut self) {
@@ -115,6 +143,7 @@ pub struct Settings {
     pub width: u32,
     pub height: u32,
     pub depth: u32,
+    flip_y: bool,
     dirty: bool,
 }
 
@@ -124,8 +153,41 @@ impl Settings {
             width,
             height,
             depth,
+            flip_y: false,
             dirty: true,
         }
+    }
+
+    fn make_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    pub fn set_flip_y(&mut self, flip_y: bool) {
+        self.flip_y = flip_y;
+        self.make_dirty();
+    }
+
+    pub fn get_flip_y(&self) -> bool {
+        self.flip_y
+    }
+
+    pub fn set_depth(&mut self, depth: u32) {
+        self.depth = depth;
+        self.make_dirty();
+    }
+
+    pub fn get_depth(&self) -> u32 {
+        self.depth
+    }
+
+    pub fn set_resolution(&mut self, width: u32, height: u32) {
+        self.width = width;
+        self.height = height;
+        self.make_dirty();
+    }
+
+    pub fn get_resolution(&self) -> (u32, u32) {
+        (self.width, self.height)
     }
 }
 

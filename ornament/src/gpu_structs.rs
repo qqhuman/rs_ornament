@@ -72,7 +72,7 @@ pub struct ConstantState {
     depth: u32,
     width: u32,
     height: u32,
-    _padding: [u32; 1], // 16 byte offset
+    flip_y: u32,
 }
 
 impl ConstantState {
@@ -81,7 +81,7 @@ impl ConstantState {
             depth: settings.depth,
             width: settings.width,
             height: settings.height,
-            ..Default::default()
+            flip_y: if settings.flip_y { 1 } else { 0 },
         }
     }
 }

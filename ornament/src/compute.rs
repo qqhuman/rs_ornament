@@ -20,7 +20,7 @@ pub struct Unit {
     bind_groups: Vec<wgpu::BindGroup>,
 
     // rng buffer
-    _rng_state_buffer: Buffer,
+    _rng_state_buffer: StorageBuffer,
 
     // dynamic state/constant state/camera
     dynamic_state: DynamicState,
@@ -29,13 +29,13 @@ pub struct Unit {
     camera_buffer: UniformBuffer,
 
     // materials/bvh nodes
-    _materials_buffer: Buffer,
-    _bvh_nodes_buffer: Buffer,
+    _materials_buffer: StorageBuffer,
+    _bvh_nodes_buffer: StorageBuffer,
 
     // normals/normals indices/transforms
-    _normals_buffer: Buffer,
-    _normal_indices_buffer: Buffer,
-    _transforms_buffer: Buffer,
+    _normals_buffer: StorageBuffer,
+    _normal_indices_buffer: StorageBuffer,
+    _transforms_buffer: StorageBuffer,
 }
 
 impl Unit {
@@ -64,10 +64,15 @@ impl Unit {
         let mut bind_groups = vec![];
 
         let (target_buffer, rng_state_buffer) = {
-            let target_buffer = TargetBuffer::new(&device, settings.width, settings.height);
+            let target_buffer = TargetBuffer::new(
+                device.clone(),
+                queue.clone(),
+                settings.width,
+                settings.height,
+            );
 
             let rng_seed = (0..(settings.width * settings.height)).collect::<Vec<_>>();
-            let rng_state_buffer = Buffer::new_from_bytes(
+            let rng_state_buffer = StorageBuffer::new_from_bytes(
                 &device,
                 bytemuck::cast_slice(rng_seed.as_slice()),
                 2,
@@ -161,14 +166,14 @@ impl Unit {
         };
 
         let (materials_buffer, bvh_nodes_buffer) = {
-            let materials_buffer = Buffer::new_from_bytes(
+            let materials_buffer = StorageBuffer::new_from_bytes(
                 &device,
                 bytemuck::cast_slice(materials.as_slice()),
                 0,
                 Some("ornament_materials_buffer"),
             );
 
-            let bvh_nodes_buffer = Buffer::new_from_bytes(
+            let bvh_nodes_buffer = StorageBuffer::new_from_bytes(
                 &device,
                 bytemuck::cast_slice(bvh_nodes.as_slice()),
                 1,
@@ -197,21 +202,21 @@ impl Unit {
         };
 
         let (normals_buffer, normal_indices_buffer, transforms_buffer) = {
-            let normals_buffer = Buffer::new_from_bytes(
+            let normals_buffer = StorageBuffer::new_from_bytes(
                 &device,
                 bytemuck::cast_slice(normals.as_slice()),
                 0,
                 Some("ornament_normals_buffer"),
             );
 
-            let normal_indices_buffer = Buffer::new_from_bytes(
+            let normal_indices_buffer = StorageBuffer::new_from_bytes(
                 &device,
                 bytemuck::cast_slice(normal_indices.as_slice()),
                 1,
                 Some("ornament_normal_indices_buffer"),
             );
 
-            let transforms_buffer = Buffer::new_from_bytes(
+            let transforms_buffer = StorageBuffer::new_from_bytes(
                 &device,
                 bytemuck::cast_slice(transforms.as_slice()),
                 2,
@@ -377,12 +382,12 @@ impl DynamicState {
     }
 }
 
-pub struct Buffer {
-    handle: wgpu::Buffer,
+pub struct StorageBuffer {
+    pub handle: wgpu::Buffer,
     binding_idx: u32,
 }
 
-impl Buffer {
+impl StorageBuffer {
     pub fn new_from_bytes(
         device: &wgpu::Device,
         bytes: &[u8],
@@ -401,9 +406,19 @@ impl Buffer {
         }
     }
 
-    pub fn new(device: &wgpu::Device, size: u64, binding_idx: u32, label: Option<&str>) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        size: u64,
+        binding_idx: u32,
+        label: Option<&str>,
+        copy_src: bool,
+    ) -> Self {
+        let mut usage = wgpu::BufferUsages::STORAGE;
+        if copy_src {
+            usage = usage | wgpu::BufferUsages::COPY_SRC;
+        }
         let handle = device.create_buffer(&wgpu::BufferDescriptor {
-            usage: wgpu::BufferUsages::STORAGE,
+            usage,
             size,
             label,
             mapped_at_creation: false,
@@ -521,21 +536,42 @@ impl UniformBuffer {
 }
 
 pub struct TargetBuffer {
-    buffer: Buffer,
-    accumulation_buffer: Buffer,
+    device: Rc<wgpu::Device>,
+    queue: Rc<wgpu::Queue>,
+    buffer: StorageBuffer,
+    accumulation_buffer: StorageBuffer,
+    map_buffer: wgpu::Buffer,
+    size: u64,
 }
 
 impl TargetBuffer {
-    pub fn new(device: &wgpu::Device, width: u32, height: u32) -> Self {
+    pub fn new(device: Rc<wgpu::Device>, queue: Rc<wgpu::Queue>, width: u32, height: u32) -> Self {
         let size = width * height * (mem::size_of::<f32>() as u32) * 4;
         let size = size as u64;
 
-        let buffer = Buffer::new(device, size, 0, Some("target buffer"));
-        let accumulation_buffer = Buffer::new(device, size, 1, Some("accumulation buffer"));
+        let buffer = StorageBuffer::new(&device, size, 0, Some("ornament_target_buffer"), true);
+        let accumulation_buffer = StorageBuffer::new(
+            &device,
+            size,
+            1,
+            Some("ornament_target_accumulation_buffer"),
+            false,
+        );
+
+        let map_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            size,
+            label: Some("ornament_target_map_buffer"),
+            mapped_at_creation: false,
+        });
 
         Self {
+            device,
+            queue,
             buffer,
             accumulation_buffer,
+            map_buffer,
+            size,
         }
     }
 
@@ -550,5 +586,21 @@ impl TargetBuffer {
 
     pub fn binding(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
         self.buffer.binding_with(binding)
+    }
+
+    pub async fn get_data(&self) -> wgpu::BufferView<'_> {
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("") });
+        encoder.copy_buffer_to_buffer(&self.buffer.handle, 0, &self.map_buffer, 0, self.size);
+        self.queue.submit(Some(encoder.finish()));
+
+        let buffer_slice = self.map_buffer.slice(..);
+        let (tx, rx) = futures_intrusive::channel::shared::oneshot_channel();
+        buffer_slice.map_async(wgpu::MapMode::Read, move |result| tx.send(result).unwrap());
+        self.device.poll(wgpu::Maintain::Wait);
+        rx.receive().await.unwrap().unwrap();
+
+        buffer_slice.get_mapped_range()
     }
 }
