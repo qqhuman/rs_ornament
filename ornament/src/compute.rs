@@ -4,11 +4,11 @@ use wgpu::util::DeviceExt;
 
 use crate::{bvh, gpu_structs, Scene};
 
-use super::Settings;
+use super::State;
 
 pub const WORKGROUP_SIZE: u32 = 64;
 
-pub struct Unit {
+pub(super) struct Unit {
     pub device: Rc<wgpu::Device>,
     pub queue: Rc<wgpu::Queue>,
 
@@ -42,8 +42,8 @@ impl Unit {
     pub fn new(
         device: Rc<wgpu::Device>,
         queue: Rc<wgpu::Queue>,
-        settings: &Settings,
         scene: &Scene,
+        state: &State,
     ) -> Self {
         let bvh_tree = bvh::build(scene);
         let mut normals = bvh_tree.normals;
@@ -64,14 +64,10 @@ impl Unit {
         let mut bind_groups = vec![];
 
         let (target_buffer, rng_state_buffer) = {
-            let target_buffer = TargetBuffer::new(
-                device.clone(),
-                queue.clone(),
-                settings.width,
-                settings.height,
-            );
+            let target_buffer =
+                TargetBuffer::new(device.clone(), queue.clone(), state.width, state.height);
 
-            let rng_seed = (0..(settings.width * settings.height)).collect::<Vec<_>>();
+            let rng_seed = (0..(state.width * state.height)).collect::<Vec<_>>();
             let rng_state_buffer = StorageBuffer::new_from_bytes(
                 &device,
                 bytemuck::cast_slice(rng_seed.as_slice()),
@@ -120,7 +116,7 @@ impl Unit {
 
             let constant_state_buffer = UniformBuffer::new_from_bytes(
                 &device,
-                bytemuck::cast_slice(&[gpu_structs::ConstantState::from(settings)]),
+                bytemuck::cast_slice(&[gpu_structs::ConstantState::from(state)]),
                 1,
                 Some("ornament_constant_state_buffer"),
                 false,
@@ -285,7 +281,7 @@ impl Unit {
             entry_point: "main",
         });
 
-        let pixels = settings.width * settings.height;
+        let pixels = state.width * state.height;
         let workgroups = (pixels / WORKGROUP_SIZE) + (pixels % WORKGROUP_SIZE);
 
         Self {
@@ -312,7 +308,7 @@ impl Unit {
         self.dynamic_state.reset();
     }
 
-    pub fn update(&mut self, settings: &mut Settings, scene: &mut Scene) {
+    pub fn update(&mut self, state: &mut State, scene: &mut Scene) {
         let mut dirty = false;
         if scene.camera.dirty {
             dirty = true;
@@ -324,13 +320,13 @@ impl Unit {
             );
         }
 
-        if settings.dirty {
+        if state.dirty {
             dirty = true;
-            settings.dirty = false;
+            state.dirty = false;
             self.queue.write_buffer(
                 &self.constant_state_buffer.handle(),
                 0,
-                bytemuck::cast_slice(&[gpu_structs::ConstantState::from(&settings)]),
+                bytemuck::cast_slice(&[gpu_structs::ConstantState::from(&state)]),
             );
         }
 

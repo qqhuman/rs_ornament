@@ -22,15 +22,11 @@ async fn run() {
     };
     let mut fps_counter = util::FpsCounter::new();
     let scene = examples::random_scene_with_3_lucy(WIDTH, HEIGHT);
-    let mut path_tracer = ornament::Context::new(
-        ornament::Settings::new(WIDTH, HEIGHT, DEPTH),
-        scene,
-        backens,
-        limits,
-    )
-    .await
-    .unwrap();
+    let mut path_tracer = ornament::Context::new(scene, WIDTH, HEIGHT, backens, limits)
+        .await
+        .unwrap();
 
+    path_tracer.set_depth(DEPTH);
     path_tracer.set_flip_y(true);
 
     for _ in 0..100 {

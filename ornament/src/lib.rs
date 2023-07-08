@@ -18,14 +18,15 @@ pub type Color = cgmath::Point3<f32>;
 
 pub struct Context {
     compute_unit: compute::Unit,
-    settings: Settings,
+    state: State,
     pub scene: Scene,
 }
 
 impl Context {
     pub async fn new(
-        settings: Settings,
         scene: Scene,
+        width: u32,
+        height: u32,
         backends: wgpu::Backends,
         limits: wgpu::Limits,
     ) -> Result<Context, wgpu::RequestDeviceError> {
@@ -51,22 +52,24 @@ impl Context {
             .request_device(&device_descriptor, None)
             .await
             .map(|(device, queue)| {
-                Self::from_device_and_queue(Rc::new(device), Rc::new(queue), settings, scene)
+                Self::from_device_and_queue(Rc::new(device), Rc::new(queue), scene, width, height)
             })
     }
 
     pub fn from_device_and_queue(
         device: Rc<wgpu::Device>,
         queue: Rc<wgpu::Queue>,
-        settings: Settings,
         scene: Scene,
+        width: u32,
+        height: u32,
     ) -> Self {
-        let compute_unit = compute::Unit::new(device, queue, &settings, &scene);
+        let state = State::new(width, height);
+        let compute_unit = compute::Unit::new(device, queue, &scene, &state);
 
         Self {
             compute_unit,
             scene,
-            settings,
+            state,
         }
     }
 
@@ -94,27 +97,27 @@ impl Context {
     }
 
     pub fn set_flip_y(&mut self, flip_y: bool) {
-        self.settings.set_flip_y(flip_y);
+        self.state.set_flip_y(flip_y);
     }
 
     pub fn get_flip_y(&self) -> bool {
-        self.settings.get_flip_y()
+        self.state.get_flip_y()
     }
 
     pub fn set_depth(&mut self, depth: u32) {
-        self.settings.set_depth(depth);
+        self.state.set_depth(depth);
     }
 
     pub fn get_depth(&self) -> u32 {
-        self.settings.get_depth()
+        self.state.get_depth()
     }
 
     pub fn set_resolution(&mut self, width: u32, height: u32) {
-        self.settings.set_resolution(width, height);
+        self.state.set_resolution(width, height);
     }
 
     pub fn get_resolution(&self) -> (u32, u32) {
-        self.settings.get_resolution()
+        self.state.get_resolution()
     }
 
     pub fn render(&mut self) {
@@ -133,26 +136,25 @@ impl Context {
     }
 
     pub fn render_with_encoder(&mut self, encoder: &mut wgpu::CommandEncoder) {
-        self.compute_unit
-            .update(&mut self.settings, &mut self.scene);
+        self.compute_unit.update(&mut self.state, &mut self.scene);
         self.compute_unit.render_with_encoder(encoder);
     }
 }
 
-pub struct Settings {
-    pub width: u32,
-    pub height: u32,
-    pub depth: u32,
+struct State {
+    width: u32,
+    height: u32,
+    depth: u32,
     flip_y: bool,
     dirty: bool,
 }
 
-impl Settings {
-    pub fn new(width: u32, height: u32, depth: u32) -> Self {
+impl State {
+    pub fn new(width: u32, height: u32) -> Self {
         Self {
             width,
             height,
-            depth,
+            depth: 10,
             flip_y: false,
             dirty: true,
         }

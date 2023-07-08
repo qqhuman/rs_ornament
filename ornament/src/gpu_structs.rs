@@ -1,7 +1,5 @@
 use std::cell::Ref;
 
-use crate::Settings;
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Camera {
@@ -68,7 +66,7 @@ impl Material {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Default, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct ConstantState {
+pub(super) struct ConstantState {
     depth: u32,
     width: u32,
     height: u32,
@@ -76,12 +74,12 @@ pub struct ConstantState {
 }
 
 impl ConstantState {
-    pub fn from(settings: &Settings) -> Self {
+    pub fn from(state: &crate::State) -> Self {
         Self {
-            depth: settings.depth,
-            width: settings.width,
-            height: settings.height,
-            flip_y: if settings.flip_y { 1 } else { 0 },
+            depth: state.depth,
+            width: state.width,
+            height: state.height,
+            flip_y: if state.flip_y { 1 } else { 0 },
         }
     }
 }

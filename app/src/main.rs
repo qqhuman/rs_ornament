@@ -12,7 +12,6 @@ use winit::{
 
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
-const DEPTH: u32 = 10;
 
 fn main() {
     pollster::block_on(run());
@@ -158,8 +157,9 @@ impl State {
         let path_tracer = ornament::Context::from_device_and_queue(
             device.clone(),
             queue.clone(),
-            ornament::Settings::new(size.width, size.height, DEPTH),
             scene,
+            size.width,
+            size.height,
         );
 
         let surface_caps = surface.get_capabilities(&adapter);
