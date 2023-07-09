@@ -21,7 +21,7 @@ async fn run() {
         _ => panic!("check the limits for the backend"),
     };
     let mut fps_counter = util::FpsCounter::new();
-    let scene = examples::random_scene_with_3_lucy(WIDTH, HEIGHT);
+    let scene = examples::random_scene_spheres(WIDTH, HEIGHT);
     let mut path_tracer = ornament::Context::new(scene, WIDTH, HEIGHT, backens, limits)
         .await
         .unwrap();

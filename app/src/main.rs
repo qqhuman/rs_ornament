@@ -30,7 +30,7 @@ pub async fn run() {
         .build(&event_loop)
         .unwrap();
     let scene =
-        examples::random_scene_with_3_lucy(window_size.width as u32, window_size.height as u32);
+        examples::random_scene_spheres(window_size.width as u32, window_size.height as u32);
 
     let mut state = State::new(window, scene).await;
     let mut fps_counter = FpsCounter::new();
