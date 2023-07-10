@@ -104,6 +104,14 @@ impl Context {
         self.state.get_flip_y()
     }
 
+    pub fn set_gamma(&mut self, gamma: f32) {
+        self.state.set_gamma(gamma);
+    }
+
+    pub fn get_gamma(&self) -> f32 {
+        self.state.get_gamma()
+    }
+
     pub fn set_depth(&mut self, depth: u32) {
         self.state.set_depth(depth);
     }
@@ -146,6 +154,7 @@ struct State {
     height: u32,
     depth: u32,
     flip_y: bool,
+    inverted_gamma: f32,
     dirty: bool,
 }
 
@@ -156,6 +165,7 @@ impl State {
             height,
             depth: 10,
             flip_y: false,
+            inverted_gamma: 1.0,
             dirty: true,
         }
     }
@@ -171,6 +181,15 @@ impl State {
 
     pub fn get_flip_y(&self) -> bool {
         self.flip_y
+    }
+
+    pub fn set_gamma(&mut self, gamma: f32) {
+        self.inverted_gamma = 1.0 / gamma;
+        self.make_dirty();
+    }
+
+    pub fn get_gamma(&self) -> f32 {
+        1.0 / self.inverted_gamma
     }
 
     pub fn set_depth(&mut self, depth: u32) {

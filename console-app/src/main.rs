@@ -1,5 +1,5 @@
-const WIDTH: u32 = 1920;
-const HEIGHT: u32 = 1080;
+const WIDTH: u32 = 1920 / 2;
+const HEIGHT: u32 = 1080 / 2;
 const DEPTH: u32 = 10;
 
 fn main() {
@@ -21,13 +21,14 @@ async fn run() {
         _ => panic!("check the limits for the backend"),
     };
     let mut fps_counter = util::FpsCounter::new();
-    let scene = examples::random_scene_spheres(WIDTH, HEIGHT);
+    let scene = examples::random_scene_mix_meshes_and_spheres(WIDTH, HEIGHT);
     let mut path_tracer = ornament::Context::new(scene, WIDTH, HEIGHT, backens, limits)
         .await
         .unwrap();
 
     path_tracer.set_depth(DEPTH);
     path_tracer.set_flip_y(true);
+    path_tracer.set_gamma(2.2);
 
     for _ in 0..100 {
         fps_counter.start_frame();

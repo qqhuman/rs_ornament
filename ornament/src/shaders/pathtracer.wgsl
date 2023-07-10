@@ -39,7 +39,10 @@ fn main(@builtin(global_invocation_id) invocation_id : vec3<u32>) {
         
         accumulation_buffer[invocation_id.x] = accumulated_rgba;
 
-        rgba = sqrt(accumulated_rgba / dynamic_state.current_iteration); // gamma=2.0.
+        rgba = accumulated_rgba / dynamic_state.current_iteration;
+        rgba.x = pow(rgba.x, constant_state.inverted_gamma);
+        rgba.y = pow(rgba.y, constant_state.inverted_gamma);
+        rgba.z = pow(rgba.z, constant_state.inverted_gamma);
         if constant_state.flip_y < 1u {
             framebuffer[invocation_id.x] = rgba;
         } else {

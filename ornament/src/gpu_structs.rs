@@ -71,6 +71,8 @@ pub(super) struct ConstantState {
     width: u32,
     height: u32,
     flip_y: u32,
+    inverted_gamma: f32,
+    _padding: u32,
 }
 
 impl ConstantState {
@@ -80,6 +82,8 @@ impl ConstantState {
             width: state.width,
             height: state.height,
             flip_y: if state.flip_y { 1 } else { 0 },
+            inverted_gamma: state.inverted_gamma,
+            ..Default::default()
         }
     }
 }

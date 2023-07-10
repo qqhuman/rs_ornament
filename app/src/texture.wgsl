@@ -13,6 +13,11 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<
 @fragment
 fn fs_main(@builtin(position) coord_in: vec4<f32>) -> @location(0) vec4<f32> {
     let xy = vec2<u32>(floor(coord_in.xy));
-    let y_flipped = dimensions.y - xy.y - 1u;
-    return framebuffer[dimensions.x * y_flipped + xy.x];
+    if all(xy < dimensions) {
+        let buffer_index = dimensions.x * xy.y + xy.x;
+        return framebuffer[buffer_index];
+    }
+    else {
+        return vec4<f32>(0.0, 0.0, 1.0, 1.0);
+    }
 }

@@ -7,4 +7,5 @@ struct ConstantState {
     width: u32,
     height: u32,
     flip_y: u32,
+    inverted_gamma: f32
 }

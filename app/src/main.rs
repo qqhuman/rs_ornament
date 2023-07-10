@@ -29,8 +29,7 @@ pub async fn run() {
         .with_resizable(false)
         .build(&event_loop)
         .unwrap();
-    let scene =
-        examples::random_scene_spheres(window_size.width as u32, window_size.height as u32);
+    let scene = examples::random_scene_spheres(window_size.width as u32, window_size.height as u32);
 
     let mut state = State::new(window, scene).await;
     let mut fps_counter = FpsCounter::new();
@@ -154,7 +153,7 @@ impl State {
 
         let device = Rc::new(device);
         let queue = Rc::new(queue);
-        let path_tracer = ornament::Context::from_device_and_queue(
+        let mut path_tracer = ornament::Context::from_device_and_queue(
             device.clone(),
             queue.clone(),
             scene,
@@ -167,7 +166,7 @@ impl State {
             .formats
             .iter()
             .copied()
-            .filter(|f| !f.is_srgb())
+            .filter(|f| f.is_srgb())
             .next()
             .unwrap_or(surface_caps.formats[0]);
         let config = wgpu::SurfaceConfiguration {
@@ -252,6 +251,11 @@ impl State {
             },
             multiview: None,
         });
+
+        path_tracer.set_flip_y(true);
+        if !surface_format.is_srgb() {
+            path_tracer.set_gamma(2.2);
+        }
 
         Self {
             path_tracer,
