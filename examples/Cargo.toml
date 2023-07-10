@@ -9,5 +9,4 @@ edition = "2021"
 cgmath = "0.18"
 rand = "0.8.5"
 ornament = { path = "../ornament" }
-[target.'cfg(windows)'.dependencies]
 load = { path = "../load" }

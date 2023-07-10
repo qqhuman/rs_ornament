@@ -1,7 +1,7 @@
 use cgmath::EuclideanSpace;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
-use ornament::{Camera, Color, Material, Mesh, MeshInstance, RcCell, Scene, Sphere};
+use ornament::{Camera, Color, Material, Mesh, MeshInstance, Scene, Sphere};
 
 fn random_color(rng: &mut StdRng) -> Color {
     Color::new(rng.gen(), rng.gen(), rng.gen())
@@ -299,7 +299,7 @@ pub fn random_scene_with_3_lucy(width: u32, height: u32) -> Scene {
         cgmath::Matrix4::from_angle_y(cgmath::Rad(std::f32::consts::PI / 2.0))
             * cgmath::Matrix4::from_scale(2.0);
 
-    let lucy = scene.add_mesh(load::assimp_mesh(
+    let lucy = scene.add_mesh(load::assimp::mesh(
         "examples/models/lucy.obj",
         cgmath::Matrix4::from_translation(cgmath::Vector3::new(-4.0, 1.0, 0.0))
             * base_lucy_transform,
@@ -320,7 +320,7 @@ pub fn random_scene_with_3_lucy(width: u32, height: u32) -> Scene {
             * base_lucy_transform,
     ));
 
-    let mut mesh_sphere: Option<RcCell<Mesh>> = None;
+    let mut mesh_sphere: Option<ornament::RcCell<Mesh>> = None;
 
     for a in -11..11 {
         for b in -11..11 {
@@ -401,7 +401,7 @@ pub fn random_scene_with_3_statuette(width: u32, height: u32) -> Scene {
 
     let base_statuette_transform = cgmath::Matrix4::from_scale(2.0);
 
-    let statuette = scene.add_mesh(load::assimp_mesh(
+    let statuette = scene.add_mesh(load::assimp::mesh(
         "examples/models/xyzrgb_statuette.ply",
         cgmath::Matrix4::from_translation(cgmath::Vector3::new(-4.0, 1.0, 0.0))
             * base_statuette_transform,
@@ -422,7 +422,7 @@ pub fn random_scene_with_3_statuette(width: u32, height: u32) -> Scene {
             * base_statuette_transform,
     ));
 
-    let mut mesh_sphere: Option<RcCell<Mesh>> = None;
+    let mut mesh_sphere: Option<ornament::RcCell<Mesh>> = None;
 
     for a in -11..11 {
         for b in -11..11 {
