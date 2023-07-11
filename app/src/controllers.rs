@@ -1,4 +1,7 @@
-use winit::{event::{ElementState, KeyEvent, WindowEvent}, keyboard::KeyCode};
+use winit::{
+    event::{ElementState, KeyEvent, WindowEvent},
+    keyboard::KeyCode,
+};
 
 pub struct Camera {
     speed: f32,

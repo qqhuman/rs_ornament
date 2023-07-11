@@ -2,7 +2,7 @@ use std::{mem, rc::Rc};
 
 use wgpu::util::DeviceExt;
 
-use crate::{bvh, gpu_structs, Scene};
+use crate::{bvh, gpu_structs, Error, Scene};
 
 use super::State;
 
@@ -39,13 +39,13 @@ pub(super) struct Unit {
 }
 
 impl Unit {
-    pub fn new(
+    pub fn try_create(
         device: Rc<wgpu::Device>,
         queue: Rc<wgpu::Queue>,
         scene: &Scene,
         state: &State,
-    ) -> Self {
-        let bvh_tree = bvh::build(scene);
+    ) -> Result<Self, Error> {
+        let bvh_tree = bvh::build(scene)?;
         let mut normals = bvh_tree.normals;
         let mut normal_indices = bvh_tree.normal_indices;
         let transforms = bvh_tree.transforms;
@@ -284,7 +284,7 @@ impl Unit {
         let pixels = state.width * state.height;
         let workgroups = (pixels / WORKGROUP_SIZE) + (pixels % WORKGROUP_SIZE);
 
-        Self {
+        Ok(Self {
             device,
             queue,
             target_buffer,
@@ -301,7 +301,7 @@ impl Unit {
             _transforms_buffer: transforms_buffer,
             _bvh_nodes_buffer: bvh_nodes_buffer,
             bind_groups,
-        }
+        })
     }
 
     pub fn reset(&mut self) {
@@ -584,7 +584,7 @@ impl TargetBuffer {
         self.buffer.binding_with(binding)
     }
 
-    pub async fn get_data(&self) -> wgpu::BufferView<'_> {
+    pub async fn get_target_array(&self) -> Result<Vec<f32>, Error> {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("") });
@@ -595,8 +595,14 @@ impl TargetBuffer {
         let (tx, rx) = futures_intrusive::channel::shared::oneshot_channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| tx.send(result).unwrap());
         self.device.poll(wgpu::Maintain::Wait);
-        rx.receive().await.unwrap().unwrap();
+        rx.receive()
+            .await
+            .unwrap()
+            .map_err(|_| Error::ReciveBuffer)?;
 
-        buffer_slice.get_mapped_range()
+        let data = buffer_slice.get_mapped_range();
+        let floats: &[f32] =
+            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f32, data.len() / 4) };
+        Ok(Vec::from(floats))
     }
 }

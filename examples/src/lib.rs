@@ -299,12 +299,15 @@ pub fn random_scene_with_3_lucy(width: u32, height: u32) -> Scene {
         cgmath::Matrix4::from_angle_y(cgmath::Rad(std::f32::consts::PI / 2.0))
             * cgmath::Matrix4::from_scale(2.0);
 
-    let lucy = scene.add_mesh(load::assimp::mesh(
-        "examples/models/lucy.obj",
-        cgmath::Matrix4::from_translation(cgmath::Vector3::new(-4.0, 1.0, 0.0))
-            * base_lucy_transform,
-        Material::lambertian(Color::new(0.4, 0.2, 0.1)),
-    ));
+    let lucy = scene.add_mesh(
+        load::assimp::mesh(
+            "examples/models/lucy.obj",
+            cgmath::Matrix4::from_translation(cgmath::Vector3::new(-4.0, 1.0, 0.0))
+                * base_lucy_transform,
+            Material::lambertian(Color::new(0.4, 0.2, 0.1)),
+        )
+        .unwrap(),
+    );
 
     scene.add_mesh_instances(MeshInstance::new(
         lucy.clone(),
@@ -401,12 +404,15 @@ pub fn random_scene_with_3_statuette(width: u32, height: u32) -> Scene {
 
     let base_statuette_transform = cgmath::Matrix4::from_scale(2.0);
 
-    let statuette = scene.add_mesh(load::assimp::mesh(
-        "examples/models/xyzrgb_statuette.ply",
-        cgmath::Matrix4::from_translation(cgmath::Vector3::new(-4.0, 1.0, 0.0))
-            * base_statuette_transform,
-        Material::lambertian(Color::new(0.4, 0.2, 0.1)),
-    ));
+    let statuette = scene.add_mesh(
+        load::assimp::mesh(
+            "examples/models/xyzrgb_statuette.ply",
+            cgmath::Matrix4::from_translation(cgmath::Vector3::new(-4.0, 1.0, 0.0))
+                * base_statuette_transform,
+            Material::lambertian(Color::new(0.4, 0.2, 0.1)),
+        )
+        .unwrap(),
+    );
 
     scene.add_mesh_instances(MeshInstance::new(
         statuette.clone(),

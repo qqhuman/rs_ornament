@@ -10,7 +10,11 @@ fn point3_max(a: cgmath::Point3<f32>, b: cgmath::Point3<f32>) -> cgmath::Point3<
     cgmath::Point3::new(a.x.max(b.x), a.y.max(b.y), a.z.max(b.z))
 }
 
-pub fn mesh(path: &str, transform: cgmath::Matrix4<f32>, material: RcCell<Material>) -> Mesh {
+pub fn mesh(
+    path: &str,
+    transform: cgmath::Matrix4<f32>,
+    material: RcCell<Material>,
+) -> Result<Mesh, Error> {
     let scene = russimp::scene::Scene::from_file(
         path,
         vec![
@@ -21,13 +25,9 @@ pub fn mesh(path: &str, transform: cgmath::Matrix4<f32>, material: RcCell<Materi
             russimp::scene::PostProcess::GenerateSmoothNormals,
         ],
     )
-    .unwrap();
+    .map_err(|_| Error::Assimp)?;
 
-    if scene.meshes.len() > 1 {
-        panic!("support only single model loading")
-    }
-
-    let mesh = &scene.meshes[0];
+    let mesh = &scene.meshes.get(0).ok_or(Error::MeshesNotFound)?;
 
     let mut vertices = vec![];
     let mut normals = vec![];
@@ -72,19 +72,38 @@ pub fn mesh(path: &str, transform: cgmath::Matrix4<f32>, material: RcCell<Materi
     let t = (min - cgmath::Point3::from_value(0.0)) + (max - min) * 0.5;
     let translate = cgmath::Matrix4::from_translation(t)
         .inverse_transform()
-        .unwrap();
+        .ok_or(Error::MeshNormalizing)?;
     let scale = cgmath::Matrix4::from_scale(1.0 / (max.y - min.y));
     let normalize_matrix = scale * translate;
     for v in vertices.iter_mut() {
         *v = normalize_matrix.transform_point(*v);
     }
 
-    Mesh::new(
+    Ok(Mesh::new(
         vertices,
         vertex_indices,
         normals,
         normal_indices,
         transform,
         material,
-    )
+    ))
 }
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Error {
+    Assimp,
+    MeshesNotFound,
+    MeshNormalizing,
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Error::MeshesNotFound => write!(f, "MeshesNotFound error occurred"),
+            Error::MeshNormalizing => write!(f, "MeshNormalizing error occurred"),
+            Error::Assimp => write!(f, "Assimp error occurred."),
+        }
+    }
+}
+
+impl std::error::Error for Error {}

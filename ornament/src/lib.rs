@@ -29,7 +29,7 @@ impl Context {
         height: u32,
         backends: wgpu::Backends,
         limits: wgpu::Limits,
-    ) -> Result<Context, wgpu::RequestDeviceError> {
+    ) -> Result<Context, Error> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends,
             dx12_shader_compiler: Default::default(),
@@ -42,18 +42,19 @@ impl Context {
                 force_fallback_adapter: false,
             })
             .await
-            .unwrap();
+            .ok_or(Error::RequestAdapter)?;
+
         let device_descriptor = wgpu::DeviceDescriptor {
             features: wgpu::Features::empty(),
             limits,
             label: None,
         };
-        adapter
+        let (device, queue) = adapter
             .request_device(&device_descriptor, None)
             .await
-            .map(|(device, queue)| {
-                Self::from_device_and_queue(Rc::new(device), Rc::new(queue), scene, width, height)
-            })
+            .map_err(|_| Error::RequestDevice)?;
+
+        Self::from_device_and_queue(Rc::new(device), Rc::new(queue), scene, width, height)
     }
 
     pub fn from_device_and_queue(
@@ -62,15 +63,15 @@ impl Context {
         scene: Scene,
         width: u32,
         height: u32,
-    ) -> Self {
+    ) -> Result<Self, Error> {
         let state = State::new(width, height);
-        let compute_unit = compute::Unit::new(device, queue, &scene, &state);
+        let compute_unit = compute::Unit::try_create(device, queue, &scene, &state)?;
 
-        Self {
+        Ok(Self {
             compute_unit,
             scene,
             state,
-        }
+        })
     }
 
     pub fn target_layout(
@@ -88,8 +89,8 @@ impl Context {
         self.compute_unit.target_buffer.binding(binding)
     }
 
-    pub fn target_get_data(&self) -> impl std::future::Future<Output = wgpu::BufferView<'_>> {
-        self.compute_unit.target_buffer.get_data()
+    pub async fn get_target_array(&self) -> Result<Vec<f32>, Error> {
+        self.compute_unit.target_buffer.get_target_array().await
     }
 
     pub fn clear_buffer(&mut self) {
@@ -621,3 +622,28 @@ fn get_next_id() -> ShapeId {
     *last_id += 1;
     id
 }
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Error {
+    RequestAdapter,
+    RequestDevice,
+    SendBuffer,
+    ReciveBuffer,
+    BuildBvh,
+    Unknown,
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Error::Unknown => write!(f, "Unknown error occurred"),
+            Error::RequestDevice => write!(f, "RequestDevice error occurred"),
+            Error::SendBuffer => write!(f, "SendBuffer error occurred"),
+            Error::ReciveBuffer => write!(f, "ReciveBuffer error occurred"),
+            Error::RequestAdapter => write!(f, "RequestAdapter error occurred"),
+            Error::BuildBvh => write!(f, "BuildBvh error occurred"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}

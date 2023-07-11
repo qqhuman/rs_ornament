@@ -7,7 +7,8 @@ use winit::{
     dpi::PhysicalSize,
     event::*,
     event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder}, keyboard::KeyCode,
+    keyboard::KeyCode,
+    window::{Window, WindowBuilder},
 };
 
 const WIDTH: u32 = 1920;
@@ -160,7 +161,8 @@ impl State {
             scene,
             size.width,
             size.height,
-        );
+        )
+        .unwrap();
 
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = surface_caps

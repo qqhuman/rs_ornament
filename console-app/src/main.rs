@@ -36,9 +36,7 @@ async fn run() {
         fps_counter.end_frame();
     }
 
-    let data = path_tracer.target_get_data().await;
-    let floats: &[f32] =
-        unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f32, data.len() / 4) };
+    let floats = path_tracer.get_target_array().await.unwrap();
     let bytes = floats
         .iter()
         .map(|f| f32::clamp(f * 255.0, 0.0, 255.0) as u8)

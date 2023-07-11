@@ -6,7 +6,7 @@ use rand::Rng;
 use crate::{
     gpu_structs,
     math::{point3_max, point3_min, Aabb},
-    Material, Mesh, MeshInstance, RcCell, Scene, Sphere,
+    Error, Material, Mesh, MeshInstance, RcCell, Scene, Sphere,
 };
 
 #[derive(Default)]
@@ -38,7 +38,7 @@ pub struct Node {
     transform_id: u32,
 }
 
-pub fn build<'a>(scene: &Scene) -> Tree {
+pub fn build<'a>(scene: &Scene) -> Result<Tree, Error> {
     let mut leafs = vec![];
     leafs.extend(scene.spheres.values().map(|s| Leaf::Sphere(s.clone())));
     leafs.extend(scene.meshes.values().map(|m| Leaf::Mesh(m.clone())));
@@ -51,27 +51,27 @@ pub fn build<'a>(scene: &Scene) -> Tree {
 
     let mut bvh_tree = Tree::default();
     let mut instances_to_resolve = HashMap::new();
-    let root = build_bvh_recursive(&mut bvh_tree, &mut leafs, &mut instances_to_resolve);
+    let root = build_bvh_recursive(&mut bvh_tree, &mut leafs, &mut instances_to_resolve)?;
     bvh_tree.nodes.push(root);
 
     for (bvh_id, instance) in instances_to_resolve {
         bvh_tree.nodes[bvh_id as usize].left_or_custom_id = instance.borrow().mesh.borrow().bvh_id;
     }
-    bvh_tree
+    Ok(bvh_tree)
 }
 
 fn build_bvh_recursive<'a>(
     bvh_tree: &mut Tree,
     shapes: &mut [Leaf],
     instances_to_resolve: &mut HashMap<u32, RcCell<MeshInstance>>,
-) -> Node {
+) -> Result<Node, Error> {
     let num_shapes = shapes.len() as u32;
 
     let node = match shapes.split_first_mut() {
         None => panic!("don't support empty bvh"),
         Some((head, [])) => match head {
             Leaf::Mesh(mesh) => {
-                let mesh_top = from_mesh(bvh_tree, mesh.clone(), instances_to_resolve);
+                let mesh_top = from_mesh(bvh_tree, mesh.clone(), instances_to_resolve)?;
 
                 bvh_tree.nodes.push(mesh_top);
                 let mesh_top_id = bvh_tree.nodes.len() - 1;
@@ -79,7 +79,7 @@ fn build_bvh_recursive<'a>(
                 mesh.bvh_id = mesh_top_id as u32;
 
                 let transform = mesh.transform;
-                let inverse_transform = transform.inverse_transform().unwrap();
+                let inverse_transform = transform.inverse_transform().ok_or(Error::BuildBvh)?;
                 bvh_tree.transforms.push(inverse_transform.into());
                 bvh_tree.transforms.push(transform.into());
                 let transform_id = bvh_tree.transforms.len() / 2 - 1;
@@ -98,7 +98,7 @@ fn build_bvh_recursive<'a>(
                 instances_to_resolve.insert(bvh_tree.nodes.len() as u32, instance.clone());
                 let instance = instance.borrow();
                 let transform = instance.transform;
-                let inverse_transform = transform.inverse_transform().unwrap();
+                let inverse_transform = transform.inverse_transform().ok_or(Error::BuildBvh)?;
                 bvh_tree.transforms.push(inverse_transform.into());
                 bvh_tree.transforms.push(transform.into());
                 let transform_id = bvh_tree.transforms.len() / 2 - 1;
@@ -118,7 +118,7 @@ fn build_bvh_recursive<'a>(
             Leaf::Sphere(sphere) => {
                 let sphere = sphere.borrow();
                 let transform = sphere.transform;
-                let inverse_transform = transform.inverse_transform().unwrap();
+                let inverse_transform = transform.inverse_transform().ok_or(Error::BuildBvh)?;
                 bvh_tree.transforms.push(inverse_transform.into());
                 bvh_tree.transforms.push(transform.into());
                 let transform_id = bvh_tree.transforms.len() / 2 - 1;
@@ -160,11 +160,11 @@ fn build_bvh_recursive<'a>(
 
             // Recursively build BVH for left and right subsets
             let left = build_bvh_recursive(bvh_tree, left_shapes, instances_to_resolve);
-            bvh_tree.nodes.push(left);
+            bvh_tree.nodes.push(left?);
             let left = bvh_tree.nodes.len() as u32 - 1;
 
             let right = build_bvh_recursive(bvh_tree, right_shapes, instances_to_resolve);
-            bvh_tree.nodes.push(right);
+            bvh_tree.nodes.push(right?);
             let right = bvh_tree.nodes.len() as u32 - 1;
 
             let left_aabb = calculate_bounding_box(&left_shapes);
@@ -183,7 +183,7 @@ fn build_bvh_recursive<'a>(
         }
     };
 
-    node
+    Ok(node)
 }
 
 fn get_material_index(bvh_tree: &mut Tree, material: Ref<Material>) -> u32 {
@@ -202,7 +202,7 @@ fn from_mesh(
     bvh_tree: &mut Tree,
     mesh: RcCell<Mesh>,
     instances_to_resolve: &mut HashMap<u32, RcCell<MeshInstance>>,
-) -> Node {
+) -> Result<Node, Error> {
     let mesh = mesh.borrow_mut();
     let mut triangles = vec![];
     for mesh_triangle_index in 0..mesh.vertex_indices.len() / 3 {
