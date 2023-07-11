@@ -1,4 +1,4 @@
-use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
+use winit::{event::{ElementState, KeyEvent, WindowEvent}, keyboard::KeyCode};
 
 pub struct Camera {
     speed: f32,
@@ -24,29 +24,29 @@ impl Camera {
     pub fn process_events(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
+                event:
+                    KeyEvent {
                         state,
-                        virtual_keycode: Some(keycode),
+                        physical_key,
                         ..
                     },
                 ..
             } => {
                 let is_pressed = *state == ElementState::Pressed;
-                match keycode {
-                    VirtualKeyCode::W | VirtualKeyCode::Up => {
+                match physical_key {
+                    KeyCode::KeyW | KeyCode::ArrowUp => {
                         self.is_forward_pressed = is_pressed;
                         self.dirty = true;
                     }
-                    VirtualKeyCode::A | VirtualKeyCode::Left => {
+                    KeyCode::KeyA | KeyCode::ArrowLeft => {
                         self.is_left_pressed = is_pressed;
                         self.dirty = true;
                     }
-                    VirtualKeyCode::S | VirtualKeyCode::Down => {
+                    KeyCode::KeyS | KeyCode::ArrowDown => {
                         self.is_backward_pressed = is_pressed;
                         self.dirty = true;
                     }
-                    VirtualKeyCode::D | VirtualKeyCode::Right => {
+                    KeyCode::KeyD | KeyCode::ArrowRight => {
                         self.is_right_pressed = is_pressed;
                         self.dirty = true;
                     }
@@ -91,10 +91,10 @@ impl Camera {
             // Rescale the distance between the target and eye so
             // that it doesn't change. The eye therefore still
             // lies on the circle made by the target and eye.
-            eye = target - (forward + right * self.speed).normalize() * forward_mag;
+            eye = target - (forward - right * self.speed).normalize() * forward_mag;
         }
         if self.is_left_pressed {
-            eye = target - (forward - right * self.speed).normalize() * forward_mag;
+            eye = target - (forward + right * self.speed).normalize() * forward_mag;
         }
 
         camera.set_look_at(eye, target, up);

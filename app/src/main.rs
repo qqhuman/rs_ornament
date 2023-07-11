@@ -7,11 +7,12 @@ use winit::{
     dpi::PhysicalSize,
     event::*,
     event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder},
+    window::{Window, WindowBuilder}, keyboard::KeyCode,
 };
 
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
+const DEPTH: u32 = 10;
 
 fn main() {
     pollster::block_on(run());
@@ -43,10 +44,10 @@ pub async fn run() {
                 match event {
                     WindowEvent::CloseRequested
                     | WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
+                        event:
+                            KeyEvent {
                                 state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
+                                physical_key: KeyCode::Escape,
                                 ..
                             },
                         ..
@@ -253,6 +254,7 @@ impl State {
         });
 
         path_tracer.set_flip_y(true);
+        path_tracer.set_depth(DEPTH);
         if !surface_format.is_srgb() {
             path_tracer.set_gamma(2.2);
         }
