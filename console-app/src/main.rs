@@ -7,22 +7,19 @@ fn main() {
 }
 
 async fn run() {
-    let backens = wgpu::Backends::DX12;
-    let limits = match backens {
-        _ if cfg!(target_arch = "wasm32") => wgpu::Limits::downlevel_webgl2_defaults(),
-        wgpu::Backends::GL => wgpu::Limits::downlevel_defaults(),
-        wgpu::Backends::VULKAN | wgpu::Backends::DX12 => {
-            let mut limits = wgpu::Limits::default();
-            // extend the max storage buffer size from 134MB to 1073MB
-            limits.max_storage_buffer_binding_size = 128 << 24;
-            limits.max_buffer_size = 1 << 32;
-            limits
-        }
-        _ => panic!("check the limits for the backend"),
-    };
     let mut fps_counter = util::FpsCounter::new();
     let scene = examples::random_scene_mix_meshes_and_spheres(WIDTH, HEIGHT);
-    let mut path_tracer = ornament::Context::new(scene, WIDTH, HEIGHT, backens, limits)
+    let mut context_properties = ornament::ContextProperties::new_with_priorities(vec![
+        ornament::Backend::Dx12,
+        ornament::Backend::Vulkan,
+        ornament::Backend::Dx11,
+        ornament::Backend::Metal,
+        ornament::Backend::Gl,
+    ]);
+    // extend the max storage buffer size from 134MB to 1073MB
+    context_properties.max_storage_buffer_binding_size = 128 << 24;
+    context_properties.max_buffer_size = 1 << 32;
+    let mut path_tracer = ornament::Context::create(scene, WIDTH, HEIGHT, context_properties)
         .await
         .unwrap();
 
@@ -30,7 +27,7 @@ async fn run() {
     path_tracer.set_flip_y(true);
     path_tracer.set_gamma(2.2);
 
-    for _ in 0..100 {
+    for _ in 0..1000 {
         fps_counter.start_frame();
         path_tracer.render();
         fps_counter.end_frame();

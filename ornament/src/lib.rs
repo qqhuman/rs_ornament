@@ -7,6 +7,8 @@ use std::{
 
 use cgmath::{Array, EuclideanSpace, InnerSpace};
 use math::{degrees_to_radians, point3_max, point3_min, Aabb};
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 mod bvh;
 mod compute;
@@ -16,6 +18,36 @@ mod math;
 pub type RcCell<T> = Rc<RefCell<T>>;
 pub type Color = cgmath::Point3<f32>;
 
+#[derive(EnumIter)]
+pub enum Backend {
+    Vulkan,
+    Dx12,
+    Dx11,
+    Metal,
+    Gl,
+}
+
+pub struct ContextProperties {
+    backends_priorities: Vec<Backend>,
+    pub max_buffer_size: u64,
+    pub max_storage_buffer_binding_size: u32,
+}
+
+impl ContextProperties {
+    pub fn new_with_priorities(priorities: Vec<Backend>) -> Self {
+        let wgpu_default_limits = wgpu::Limits::default();
+        Self {
+            backends_priorities: priorities,
+            max_buffer_size: wgpu_default_limits.max_buffer_size,
+            max_storage_buffer_binding_size: wgpu_default_limits.max_storage_buffer_binding_size,
+        }
+    }
+
+    pub fn new(backend: Backend) -> Self {
+        Self::new_with_priorities(vec![backend])
+    }
+}
+
 pub struct Context {
     compute_unit: compute::Unit,
     state: State,
@@ -23,15 +55,12 @@ pub struct Context {
 }
 
 impl Context {
-    pub async fn new(
-        scene: Scene,
-        width: u32,
-        height: u32,
-        backends: wgpu::Backends,
+    async fn requst_device(
+        backend: wgpu::Backends,
         limits: wgpu::Limits,
-    ) -> Result<Context, Error> {
+    ) -> Result<(wgpu::Device, wgpu::Queue), Error> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends,
+            backends: backend,
             dx12_shader_compiler: Default::default(),
         });
 
@@ -49,12 +78,54 @@ impl Context {
             limits,
             label: None,
         };
-        let (device, queue) = adapter
+
+        adapter
             .request_device(&device_descriptor, None)
             .await
-            .map_err(|_| Error::RequestDevice)?;
+            .map_err(|_| Error::RequestDevice)
+    }
 
-        Self::from_device_and_queue(Rc::new(device), Rc::new(queue), scene, width, height)
+    pub async fn create(
+        scene: Scene,
+        width: u32,
+        height: u32,
+        properties: ContextProperties,
+    ) -> Result<Context, Error> {
+        let priorities = if properties.backends_priorities.is_empty() {
+            Backend::iter().collect()
+        } else {
+            properties.backends_priorities
+        };
+
+        let mut first_error = None;
+        for b in priorities {
+            let (backend, mut limits) = match b {
+                Backend::Vulkan => (wgpu::Backends::VULKAN, wgpu::Limits::default()),
+                Backend::Dx12 => (wgpu::Backends::DX12, wgpu::Limits::default()),
+                Backend::Metal => (wgpu::Backends::METAL, wgpu::Limits::default()),
+                Backend::Dx11 => (wgpu::Backends::DX11, wgpu::Limits::downlevel_defaults()),
+                Backend::Gl => (wgpu::Backends::GL, wgpu::Limits::downlevel_defaults()),
+            };
+
+            limits.max_buffer_size = properties.max_buffer_size;
+            limits.max_storage_buffer_binding_size = properties.max_storage_buffer_binding_size;
+
+            match Self::requst_device(backend, limits).await {
+                Ok((device, queue)) => {
+                    return Self::from_device_and_queue(
+                        Rc::new(device),
+                        Rc::new(queue),
+                        scene,
+                        width,
+                        height,
+                    );
+                }
+                Err(err) if first_error.is_none() => first_error = Some(err),
+                _ => {}
+            }
+        }
+
+        Err(first_error.unwrap_or(Error::Unknown))
     }
 
     pub fn from_device_and_queue(
@@ -65,7 +136,7 @@ impl Context {
         height: u32,
     ) -> Result<Self, Error> {
         let state = State::new(width, height);
-        let compute_unit = compute::Unit::try_create(device, queue, &scene, &state)?;
+        let compute_unit = compute::Unit::create(device, queue, &scene, &state)?;
 
         Ok(Self {
             compute_unit,

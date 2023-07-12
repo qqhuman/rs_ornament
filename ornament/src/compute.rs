@@ -39,7 +39,7 @@ pub(super) struct Unit {
 }
 
 impl Unit {
-    pub fn try_create(
+    pub fn create(
         device: Rc<wgpu::Device>,
         queue: Rc<wgpu::Queue>,
         scene: &Scene,
