@@ -19,6 +19,13 @@ fn main() {
     pollster::block_on(run());
 }
 
+pub struct WgpuContext {
+    surface: wgpu::Surface,
+    adapter: wgpu::Adapter,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+}
+
 pub async fn run() {
     env_logger::init();
     let event_loop = EventLoop::new();
@@ -102,59 +109,81 @@ struct State {
 }
 
 impl State {
-    async fn new(window: Window, scene: ornament::Scene) -> Self {
-        let size = window.inner_size();
-
-        // The instance is a handle to our GPU
-        let backend = wgpu::Backends::DX12;
+    async fn request_wgpu_context_with_backend(
+        backend: wgpu::Backends,
+        window: &Window,
+        limits: wgpu::Limits,
+    ) -> Option<WgpuContext> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: backend,
             dx12_shader_compiler: Default::default(),
         });
 
-        // # Safety
-        //
-        // The surface needs to live as long as the window that created it.
-        // State owns the window so this should be safe.
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+        let surface = unsafe { instance.create_surface(&window).ok()? };
+
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
-            .await
-            .unwrap();
+            .await?;
 
-        // WebGL doesn't support all of wgpu's features, so if
-        // we're building for the web we'll have to disable some.
-        let limits = match backend {
-            _ if cfg!(target_arch = "wasm32") => wgpu::Limits::downlevel_webgl2_defaults(),
-            wgpu::Backends::GL => wgpu::Limits::downlevel_defaults(),
-            wgpu::Backends::VULKAN | wgpu::Backends::DX12 => {
-                let mut limits = wgpu::Limits::default();
-                // extend the max storage buffer size from 134MB to 1073MB
-                limits.max_storage_buffer_binding_size = 128 << 24;
-                limits.max_buffer_size = 1 << 32;
-                limits
-            }
-            _ => panic!("check the limits for the backend"),
+        let device_descriptor = wgpu::DeviceDescriptor {
+            features: wgpu::Features::empty(),
+            limits,
+            label: None,
         };
-
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
-                    limits,
-                    label: None,
-                },
-                None, // Trace path
-            )
+            .request_device(&device_descriptor, None)
             .await
-            .unwrap();
+            .ok()?;
 
-        let device = Rc::new(device);
-        let queue = Rc::new(queue);
+        Some(WgpuContext {
+            surface,
+            adapter,
+            device,
+            queue,
+        })
+    }
+
+    async fn request_wgpu_context(properties: Vec<wgpu::Backends>, window: &Window) -> WgpuContext {
+        for b in properties {
+            let limits = match b {
+                wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::METAL => {
+                    let mut limits = wgpu::Limits::default();
+                    // extend the max storage buffer size from 134MB to 1073MB
+                    limits.max_storage_buffer_binding_size = 128 << 24;
+                    limits.max_buffer_size = 1 << 32;
+                    limits
+                }
+                wgpu::Backends::DX11 | wgpu::Backends::GL => wgpu::Limits::downlevel_defaults(),
+                _ => panic!("check the limits for the backend"),
+            };
+
+            match Self::request_wgpu_context_with_backend(b, window, limits).await {
+                Some(wgpu_context) => return wgpu_context,
+                _ => {}
+            }
+        }
+
+        panic!("couldn't find working backend")
+    }
+
+    async fn new(window: Window, scene: ornament::Scene) -> Self {
+        let size = window.inner_size();
+        let backend_priorities = vec![
+            wgpu::Backends::DX12,
+            wgpu::Backends::VULKAN,
+            wgpu::Backends::DX11,
+            wgpu::Backends::GL,
+            wgpu::Backends::METAL,
+        ];
+        let wgpu_context = Self::request_wgpu_context(backend_priorities, &window).await;
+
+        let device = Rc::new(wgpu_context.device);
+        let queue = Rc::new(wgpu_context.queue);
+        let surface = wgpu_context.surface;
         let mut path_tracer = ornament::Context::from_device_and_queue(
             device.clone(),
             queue.clone(),
@@ -164,7 +193,7 @@ impl State {
         )
         .unwrap();
 
-        let surface_caps = surface.get_capabilities(&adapter);
+        let surface_caps = surface.get_capabilities(&wgpu_context.adapter);
         let surface_format = surface_caps
             .formats
             .iter()
@@ -318,9 +347,9 @@ impl State {
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
                         a: 1.0,
                     }),
                     store: true,

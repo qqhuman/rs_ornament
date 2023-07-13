@@ -55,7 +55,7 @@ pub struct Context {
 }
 
 impl Context {
-    async fn requst_device(
+    async fn request_device(
         backend: wgpu::Backends,
         limits: wgpu::Limits,
     ) -> Result<(wgpu::Device, wgpu::Queue), Error> {
@@ -99,18 +99,26 @@ impl Context {
 
         let mut first_error = None;
         for b in priorities {
-            let (backend, mut limits) = match b {
-                Backend::Vulkan => (wgpu::Backends::VULKAN, wgpu::Limits::default()),
-                Backend::Dx12 => (wgpu::Backends::DX12, wgpu::Limits::default()),
-                Backend::Metal => (wgpu::Backends::METAL, wgpu::Limits::default()),
-                Backend::Dx11 => (wgpu::Backends::DX11, wgpu::Limits::downlevel_defaults()),
-                Backend::Gl => (wgpu::Backends::GL, wgpu::Limits::downlevel_defaults()),
+            let backend = match b {
+                Backend::Vulkan => wgpu::Backends::VULKAN,
+                Backend::Dx12 => wgpu::Backends::DX12,
+                Backend::Metal => wgpu::Backends::METAL,
+                Backend::Dx11 => wgpu::Backends::DX11,
+                Backend::Gl => wgpu::Backends::GL,
             };
 
-            limits.max_buffer_size = properties.max_buffer_size;
-            limits.max_storage_buffer_binding_size = properties.max_storage_buffer_binding_size;
+            let limits = match b {
+                Backend::Vulkan | Backend::Dx12 | Backend::Metal => {
+                    let mut limits = wgpu::Limits::default();
+                    limits.max_buffer_size = properties.max_buffer_size;
+                    limits.max_storage_buffer_binding_size =
+                        properties.max_storage_buffer_binding_size;
+                    limits
+                }
+                Backend::Dx11 | Backend::Gl => wgpu::Limits::downlevel_defaults(),
+            };
 
-            match Self::requst_device(backend, limits).await {
+            match Self::request_device(backend, limits).await {
                 Ok((device, queue)) => {
                     return Self::from_device_and_queue(
                         Rc::new(device),
