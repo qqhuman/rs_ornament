@@ -8,5 +8,6 @@ edition = "2021"
 [dependencies]
 cgmath = "0.18"
 ornament = { path = "../ornament" }
+obj-rs = "0.7.1"
 [target.'cfg(windows)'.dependencies]
 russimp = { version = "2.0.5", features = ["prebuilt"] }

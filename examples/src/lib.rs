@@ -267,7 +267,6 @@ pub fn random_scene_meshes(width: u32, height: u32) -> Scene {
     scene
 }
 
-#[cfg(target_os = "windows")]
 pub fn random_scene_with_3_lucy(width: u32, height: u32) -> Scene {
     let aspect_ratio = width as f32 / height as f32;
     let vfov = 20.0;
@@ -300,7 +299,7 @@ pub fn random_scene_with_3_lucy(width: u32, height: u32) -> Scene {
             * cgmath::Matrix4::from_scale(2.0);
 
     let lucy = scene.add_mesh(
-        load::assimp::mesh(
+        load::obj::mesh(
             "examples/models/lucy.obj",
             cgmath::Matrix4::from_translation(cgmath::Vector3::new(-4.0, 1.0, 0.0))
                 * base_lucy_transform,
