@@ -1,8 +1,8 @@
 use cgmath::{Array, Transform};
 
-pub mod obj;
 #[cfg(target_os = "windows")]
 pub mod assimp;
+pub mod obj;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Error {
