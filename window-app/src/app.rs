@@ -1,5 +1,3 @@
-mod controllers;
-
 use std::rc::Rc;
 
 use util::{FpsCounter, UniformBuffer};
@@ -11,20 +9,12 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
+use crate::controllers;
+
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
+const RESIZABLE: bool = true;
 const DEPTH: u32 = 10;
-
-fn main() {
-    pollster::block_on(run());
-}
-
-pub struct WgpuContext {
-    surface: wgpu::Surface,
-    adapter: wgpu::Adapter,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-}
 
 pub async fn run() {
     env_logger::init();
@@ -35,7 +25,7 @@ pub async fn run() {
     };
     let window = WindowBuilder::new()
         .with_inner_size(window_size)
-        .with_resizable(false)
+        .with_resizable(RESIZABLE)
         .build(&event_loop)
         .unwrap();
     let scene = examples::random_scene_spheres(window_size.width as u32, window_size.height as u32);
@@ -64,7 +54,6 @@ pub async fn run() {
                         state.resize(*physical_size);
                     }
                     WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                        // new_inner_size is &&mut so we have to dereference it twice
                         state.resize(**new_inner_size);
                     }
                     _ => {}
@@ -109,67 +98,6 @@ struct State {
 }
 
 impl State {
-    async fn request_wgpu_context_with_backend(
-        backend: wgpu::Backends,
-        window: &Window,
-        limits: wgpu::Limits,
-    ) -> Option<WgpuContext> {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: backend,
-            dx12_shader_compiler: Default::default(),
-        });
-
-        let surface = unsafe { instance.create_surface(&window).ok()? };
-
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await?;
-
-        let device_descriptor = wgpu::DeviceDescriptor {
-            features: wgpu::Features::empty(),
-            limits,
-            label: None,
-        };
-        let (device, queue) = adapter
-            .request_device(&device_descriptor, None)
-            .await
-            .ok()?;
-
-        Some(WgpuContext {
-            surface,
-            adapter,
-            device,
-            queue,
-        })
-    }
-
-    async fn request_wgpu_context(properties: Vec<wgpu::Backends>, window: &Window) -> WgpuContext {
-        for b in properties {
-            let limits = match b {
-                wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::METAL => {
-                    let mut limits = wgpu::Limits::default();
-                    // extend the max storage buffer size from 134MB to 1073MB
-                    limits.max_storage_buffer_binding_size = 128 << 24;
-                    limits.max_buffer_size = 1 << 32;
-                    limits
-                }
-                wgpu::Backends::DX11 | wgpu::Backends::GL => wgpu::Limits::downlevel_defaults(),
-                _ => panic!("check the limits for the backend"),
-            };
-
-            match Self::request_wgpu_context_with_backend(b, window, limits).await {
-                Some(wgpu_context) => return wgpu_context,
-                _ => {}
-            }
-        }
-
-        panic!("couldn't find working backend")
-    }
-
     async fn new(window: Window, scene: ornament::Scene) -> Self {
         let size = window.inner_size();
         let backend_priorities = vec![
@@ -179,7 +107,7 @@ impl State {
             wgpu::Backends::GL,
             wgpu::Backends::METAL,
         ];
-        let wgpu_context = Self::request_wgpu_context(backend_priorities, &window).await;
+        let wgpu_context = request_wgpu_context(backend_priorities, &window).await;
 
         let device = Rc::new(wgpu_context.device);
         let queue = Rc::new(wgpu_context.queue);
@@ -212,9 +140,8 @@ impl State {
         };
         surface.configure(&device, &config);
 
-        //let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
+            label: Some("render_shader_module"),
             source: wgpu::ShaderSource::Wgsl(include_str!("texture.wgsl").into()),
         });
 
@@ -223,11 +150,11 @@ impl State {
             &device,
             bytemuck::cast_slice(&[width, height]),
             1,
-            Some("dimensions_buffer"),
+            Some("render_dimensions_buffer"),
         );
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Render bind group layout"),
+            label: Some("render_bgl"),
             entries: &[
                 path_tracer.target_layout(0, wgpu::ShaderStages::FRAGMENT, true),
                 dimensions_buffer.layout(wgpu::ShaderStages::FRAGMENT),
@@ -235,19 +162,19 @@ impl State {
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Render Pipeline Layout"),
+            label: Some("render_pl"),
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Render bind group"),
+            label: Some("render_bg"),
             layout: &bind_group_layout,
             entries: &[path_tracer.target_binding(0), dimensions_buffer.binding()],
         });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
+            label: Some("render_pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -331,7 +258,7 @@ impl State {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
+                label: Some("render_encoder"),
             });
 
         self.path_tracer.render_with_encoder(&mut encoder);
@@ -341,7 +268,7 @@ impl State {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Render Pass"),
+            label: Some("render_pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &view,
                 resolve_target: None,
@@ -369,4 +296,72 @@ impl State {
 
         Ok(())
     }
+}
+
+struct WgpuContext {
+    surface: wgpu::Surface,
+    adapter: wgpu::Adapter,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+}
+
+async fn request_wgpu_context_with_backend(
+    backend: wgpu::Backends,
+    window: &Window,
+    limits: wgpu::Limits,
+) -> Option<WgpuContext> {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: backend,
+        dx12_shader_compiler: Default::default(),
+    });
+
+    let surface = unsafe { instance.create_surface(&window).ok()? };
+
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: Some(&surface),
+            force_fallback_adapter: false,
+        })
+        .await?;
+
+    let device_descriptor = wgpu::DeviceDescriptor {
+        features: wgpu::Features::empty(),
+        limits,
+        label: None,
+    };
+    let (device, queue) = adapter
+        .request_device(&device_descriptor, None)
+        .await
+        .ok()?;
+
+    Some(WgpuContext {
+        surface,
+        adapter,
+        device,
+        queue,
+    })
+}
+
+async fn request_wgpu_context(properties: Vec<wgpu::Backends>, window: &Window) -> WgpuContext {
+    for b in properties {
+        let limits = match b {
+            wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::METAL => {
+                let mut limits = wgpu::Limits::default();
+                // extend the max storage buffer size from 134MB to 1073MB
+                limits.max_storage_buffer_binding_size = 128 << 24;
+                limits.max_buffer_size = 1 << 32;
+                limits
+            }
+            wgpu::Backends::DX11 | wgpu::Backends::GL => wgpu::Limits::downlevel_defaults(),
+            _ => panic!("check the limits for the backend"),
+        };
+
+        match request_wgpu_context_with_backend(b, window, limits).await {
+            Some(wgpu_context) => return wgpu_context,
+            _ => {}
+        }
+    }
+
+    panic!("couldn't find working backend")
 }

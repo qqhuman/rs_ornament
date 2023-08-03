@@ -344,7 +344,7 @@ impl Unit {
 
     pub fn render_with_encoder(&mut self, encoder: &mut wgpu::CommandEncoder) {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("Path Tracer Pass"),
+            label: Some("ornament_render_pass"),
         });
 
         pass.set_pipeline(&self.pipeline);
@@ -587,7 +587,7 @@ impl TargetBuffer {
     pub async fn get_target_array(&self) -> Result<Vec<f32>, Error> {
         let mut encoder = self
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("") });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("ornament_encoder_get_target_array") });
         encoder.copy_buffer_to_buffer(&self.buffer.handle, 0, &self.map_buffer, 0, self.size);
         self.queue.submit(Some(encoder.finish()));
 

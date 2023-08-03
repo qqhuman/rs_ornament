@@ -5,6 +5,6 @@ members = [
     "load",
     "util",
     "examples",
-    "app",
+    "window-app",
     "console-app"
 ]
