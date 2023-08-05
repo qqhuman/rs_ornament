@@ -168,8 +168,12 @@ impl Context {
         self.compute_unit.target_buffer.binding(binding)
     }
 
-    pub async fn get_target_array(&self) -> Result<Vec<f32>, Error> {
-        self.compute_unit.target_buffer.get_target_array().await
+    pub fn get_target_array_len(&self) -> u32 {
+        self.compute_unit.target_buffer.get_target_array_len()
+    }
+
+    pub async fn get_target_array(&self, dst: &mut [f32]) -> Result<(), Error> {
+        self.compute_unit.target_buffer.get_target_array(dst).await
     }
 
     pub fn clear_buffer(&mut self) {

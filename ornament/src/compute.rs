@@ -531,6 +531,7 @@ impl UniformBuffer {
     }
 }
 
+const TARGET_PIXEL_COMPONENTS: u32 = 4;
 pub struct TargetBuffer {
     device: Rc<wgpu::Device>,
     queue: Rc<wgpu::Queue>,
@@ -538,11 +539,13 @@ pub struct TargetBuffer {
     accumulation_buffer: StorageBuffer,
     map_buffer: wgpu::Buffer,
     size: u64,
+    width: u32,
+    height: u32,
 }
 
 impl TargetBuffer {
     pub fn new(device: Rc<wgpu::Device>, queue: Rc<wgpu::Queue>, width: u32, height: u32) -> Self {
-        let size = width * height * (mem::size_of::<f32>() as u32) * 4;
+        let size = width * height * (mem::size_of::<f32>() as u32) * TARGET_PIXEL_COMPONENTS;
         let size = size as u64;
 
         let buffer = StorageBuffer::new(&device, size, 0, Some("ornament_target_buffer"), true);
@@ -568,6 +571,8 @@ impl TargetBuffer {
             accumulation_buffer,
             map_buffer,
             size,
+            width,
+            height,
         }
     }
 
@@ -584,10 +589,16 @@ impl TargetBuffer {
         self.buffer.binding_with(binding)
     }
 
-    pub async fn get_target_array(&self) -> Result<Vec<f32>, Error> {
+    pub fn get_target_array_len(&self) -> u32 {
+        self.width * self.height * TARGET_PIXEL_COMPONENTS
+    }
+
+    pub async fn get_target_array(&self, dst: &mut [f32]) -> Result<(), Error> {
         let mut encoder = self
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("ornament_encoder_get_target_array") });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("ornament_encoder_get_target_array"),
+            });
         encoder.copy_buffer_to_buffer(&self.buffer.handle, 0, &self.map_buffer, 0, self.size);
         self.queue.submit(Some(encoder.finish()));
 
@@ -601,8 +612,14 @@ impl TargetBuffer {
             .map_err(|_| Error::ReciveBuffer)?;
 
         let data = buffer_slice.get_mapped_range();
-        let floats: &[f32] =
-            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f32, data.len() / 4) };
-        Ok(Vec::from(floats))
+        unsafe {
+            dst.copy_from_slice(std::slice::from_raw_parts(
+                data.as_ptr() as *const f32,
+                data.len() / TARGET_PIXEL_COMPONENTS as usize,
+            ))
+        }
+        drop(data);
+        self.map_buffer.unmap();
+        Ok(())
     }
 }

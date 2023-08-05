@@ -27,18 +27,31 @@ async fn run() {
     path_tracer.set_flip_y(true);
     path_tracer.set_gamma(2.2);
 
-    for _ in 0..1000 {
+    for _ in 0..100 {
         fps_counter.start_frame();
         path_tracer.render();
         fps_counter.end_frame();
     }
 
-    let floats = path_tracer.get_target_array().await.unwrap();
-    let bytes = floats
-        .iter()
-        .map(|f| f32::clamp(f * 255.0, 0.0, 255.0) as u8)
-        .collect();
-    let buffer =
-        image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(WIDTH, HEIGHT, bytes).unwrap();
-    buffer.save("image.png").unwrap();
+    let mut floats = vec![];
+    floats.resize(path_tracer.get_target_array_len() as usize, 0.0);
+
+    for i in 0..2 {
+        path_tracer
+            .get_target_array(floats.as_mut_slice())
+            .await
+            .unwrap();
+        let bytes = floats
+            .iter()
+            .map(|f| f32::clamp(f * 255.0, 0.0, 255.0) as u8)
+            .collect();
+
+        let image_buffer =
+            image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_vec(WIDTH, HEIGHT, bytes).unwrap();
+        let mut path = String::new();
+        path.push_str("target/image");
+        path.push_str(i.to_string().as_str());
+        path.push_str(".png");
+        image_buffer.save(path).unwrap();
+    }
 }
