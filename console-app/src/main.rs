@@ -27,16 +27,17 @@ async fn run() {
     path_tracer.set_flip_y(true);
     path_tracer.set_gamma(2.2);
 
-    for _ in 0..100 {
-        fps_counter.start_frame();
-        path_tracer.render();
-        fps_counter.end_frame();
-    }
-
     let mut floats = vec![];
     floats.resize(path_tracer.get_target_array_len() as usize, 0.0);
 
-    for i in 0..2 {
+    let mut iterations = 0;
+    for i in [1, 4, 20, 75] {
+        for _ in 0..i {
+            fps_counter.start_frame();
+            path_tracer.render();
+            fps_counter.end_frame();
+        }
+        iterations += i;
         path_tracer
             .get_target_array(floats.as_mut_slice())
             .await
@@ -49,8 +50,8 @@ async fn run() {
         let image_buffer =
             image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_vec(WIDTH, HEIGHT, bytes).unwrap();
         let mut path = String::new();
-        path.push_str("target/image");
-        path.push_str(i.to_string().as_str());
+        path.push_str("target/image_iterations_");
+        path.push_str(iterations.to_string().as_str());
         path.push_str(".png");
         image_buffer.save(path).unwrap();
     }
