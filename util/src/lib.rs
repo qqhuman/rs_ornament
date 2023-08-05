@@ -5,7 +5,7 @@ use wgpu::util::DeviceExt;
 pub struct FpsCounter {
     begin_frame: Instant,
     delta_time: Duration,
-    frames: usize,
+    frames: u32,
 }
 
 impl FpsCounter {
@@ -19,10 +19,10 @@ impl FpsCounter {
 
     pub fn start_frame(&mut self) {
         self.begin_frame = Instant::now();
-        self.frames += 1;
     }
 
-    pub fn end_frame(&mut self) {
+    pub fn end_frames(&mut self, frames: u32) {
+        self.frames += frames;
         self.delta_time += self.begin_frame.elapsed();
         if self.delta_time >= Duration::new(1, 0) {
             let frames = self.frames as f64 / self.delta_time.as_secs_f64();

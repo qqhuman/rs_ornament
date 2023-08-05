@@ -32,12 +32,12 @@ async fn run() {
 
     let mut iterations = 0;
     for i in [1, 4, 20, 75] {
-        for _ in 0..i {
-            fps_counter.start_frame();
-            path_tracer.render();
-            fps_counter.end_frame();
-        }
+        fps_counter.start_frame();
+        path_tracer.set_iterations(i);
+        path_tracer.render();
+        fps_counter.end_frames(i);
         iterations += i;
+
         path_tracer
             .get_target_array(floats.as_mut_slice())
             .await

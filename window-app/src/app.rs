@@ -15,6 +15,7 @@ const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
 const RESIZABLE: bool = true;
 const DEPTH: u32 = 10;
+const ITERATIONS: u32 = 1;
 
 pub async fn run() {
     env_logger::init();
@@ -72,7 +73,7 @@ pub async fn run() {
                 // All other errors (Outdated, Timeout) should be resolved by the next frame
                 Err(e) => eprintln!("{:?}", e),
             }
-            fps_counter.end_frame();
+            fps_counter.end_frames(ITERATIONS);
         }
         Event::MainEventsCleared => {
             // RedrawRequested will only trigger once, unless we manually
@@ -213,6 +214,7 @@ impl State {
 
         path_tracer.set_flip_y(true);
         path_tracer.set_depth(DEPTH);
+        path_tracer.set_iterations(ITERATIONS);
         if !surface_format.is_srgb() {
             path_tracer.set_gamma(2.2);
         }

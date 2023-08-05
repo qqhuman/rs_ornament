@@ -204,6 +204,14 @@ impl Context {
         self.state.get_depth()
     }
 
+    pub fn set_iterations(&mut self, iterations: u32) {
+        self.state.set_iterations(iterations);
+    }
+
+    pub fn get_iterations(&self) -> u32 {
+        self.state.get_iterations()
+    }
+
     pub fn set_resolution(&mut self, width: u32, height: u32) {
         self.state.set_resolution(width, height);
     }
@@ -239,6 +247,7 @@ struct State {
     depth: u32,
     flip_y: bool,
     inverted_gamma: f32,
+    iterations: u32,
     dirty: bool,
 }
 
@@ -250,6 +259,7 @@ impl State {
             depth: 10,
             flip_y: false,
             inverted_gamma: 1.0,
+            iterations: 1,
             dirty: true,
         }
     }
@@ -283,6 +293,14 @@ impl State {
 
     pub fn get_depth(&self) -> u32 {
         self.depth
+    }
+
+    pub fn set_iterations(&mut self, iterations: u32) {
+        self.iterations = iterations;
+    }
+
+    pub fn get_iterations(&self) -> u32 {
+        self.iterations
     }
 
     pub fn set_resolution(&mut self, width: u32, height: u32) {

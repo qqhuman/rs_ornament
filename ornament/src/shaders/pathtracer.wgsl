@@ -18,31 +18,30 @@ fn main(@builtin(global_invocation_id) invocation_id : vec3<u32>) {
     if invocation_id.x < arrayLength(&framebuffer) {
         // init data
         init_rng_state(invocation_id.x);
-
-        // trace ray
         let dimensions = vec2<u32>(constant_state.width, constant_state.height);
         let xy = vec2<u32>(invocation_id.x % dimensions.x, invocation_id.x / dimensions.x);
-        let u = (f32(xy.x) + random_f32()) / f32(dimensions.x - 1u);
-        let v = (f32(xy.y) + random_f32()) / f32(dimensions.y - 1u);
-        let r = camera_get_ray(u, v);
-        var rgb = ray_color(r);
-
-        // store data
-        rgb = clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0));
-        var rgba = vec4<f32>(rgb, 1.0);
-        var accumulated_rgba: vec4<f32>;
-        if dynamic_state.current_iteration > 1.0 {
-            accumulated_rgba = accumulation_buffer[invocation_id.x] + rgba;
-        } else {
-            accumulated_rgba = rgba;
+        var accumulated_rgba: vec4<f32> = vec4<f32>(0.0);
+        for (var i = 0u; i < dynamic_state.iterations; i = i + 1u) {
+            // trace ray
+            let u = (f32(xy.x) + random_f32()) / f32(dimensions.x - 1u);
+            let v = (f32(xy.y) + random_f32()) / f32(dimensions.y - 1u);
+            let r = camera_get_ray(u, v);
+            var rgb = ray_color(r);
+            rgb = clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+            accumulated_rgba = accumulated_rgba + vec4<f32>(rgb, 1.0);
         }
         
-        accumulation_buffer[invocation_id.x] = accumulated_rgba;
+        if dynamic_state.reset_accumulation_buf < 1u {
+            accumulated_rgba = accumulation_buffer[invocation_id.x] + accumulated_rgba;
+        }
 
-        rgba = accumulated_rgba / dynamic_state.current_iteration;
+        var rgba = accumulated_rgba / dynamic_state.current_iteration;
         rgba.x = pow(rgba.x, constant_state.inverted_gamma);
         rgba.y = pow(rgba.y, constant_state.inverted_gamma);
         rgba.z = pow(rgba.z, constant_state.inverted_gamma);
+
+        // store data
+        accumulation_buffer[invocation_id.x] = accumulated_rgba;
         if constant_state.flip_y < 1u {
             framebuffer[invocation_id.x] = rgba;
         } else {
