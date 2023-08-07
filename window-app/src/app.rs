@@ -150,15 +150,14 @@ impl State {
         let dimensions_buffer = UniformBuffer::new_from_bytes(
             &device,
             bytemuck::cast_slice(&[width, height]),
-            1,
             Some("render_dimensions_buffer"),
         );
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("render_bgl"),
             entries: &[
-                path_tracer.target_layout(0, wgpu::ShaderStages::FRAGMENT, true),
-                dimensions_buffer.layout(wgpu::ShaderStages::FRAGMENT),
+                path_tracer.target_buffer_layout(0, wgpu::ShaderStages::FRAGMENT, true),
+                dimensions_buffer.layout(1, wgpu::ShaderStages::FRAGMENT),
             ],
         });
 
@@ -171,7 +170,10 @@ impl State {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("render_bg"),
             layout: &bind_group_layout,
-            entries: &[path_tracer.target_binding(0), dimensions_buffer.binding()],
+            entries: &[
+                path_tracer.target_buffer_binding(0),
+                dimensions_buffer.binding(1),
+            ],
         });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

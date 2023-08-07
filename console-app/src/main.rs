@@ -33,9 +33,9 @@ async fn run() {
     }
 
     let mut floats = vec![];
-    floats.resize(path_tracer.get_target_array_len() as usize, 0.0);
+    floats.resize(path_tracer.get_target_buffer_len() as usize, 0.0);
     path_tracer
-        .get_target_array(floats.as_mut_slice())
+        .get_target_buffer(floats.as_mut_slice())
         .await
         .unwrap();
     let bytes = floats

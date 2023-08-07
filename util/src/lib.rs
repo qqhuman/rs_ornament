@@ -55,31 +55,26 @@ impl FpsCounter {
 
 pub struct UniformBuffer {
     handle: wgpu::Buffer,
-    binding_idx: u32,
 }
 
 impl UniformBuffer {
-    pub fn new_from_bytes(
-        device: &wgpu::Device,
-        bytes: &[u8],
-        binding_idx: u32,
-        label: Option<&str>,
-    ) -> Self {
+    pub fn new_from_bytes(device: &wgpu::Device, bytes: &[u8], label: Option<&str>) -> Self {
         let handle = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             contents: bytes,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             label,
         });
 
-        Self {
-            handle,
-            binding_idx,
-        }
+        Self { handle }
     }
 
-    pub fn layout(&self, visibility: wgpu::ShaderStages) -> wgpu::BindGroupLayoutEntry {
+    pub fn layout(
+        &self,
+        binding: u32,
+        visibility: wgpu::ShaderStages,
+    ) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
-            binding: self.binding_idx,
+            binding,
             visibility,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Uniform,
@@ -90,9 +85,9 @@ impl UniformBuffer {
         }
     }
 
-    pub fn binding(&self) -> wgpu::BindGroupEntry<'_> {
+    pub fn binding(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
         wgpu::BindGroupEntry {
-            binding: self.binding_idx,
+            binding,
             resource: self.handle.as_entire_binding(),
         }
     }

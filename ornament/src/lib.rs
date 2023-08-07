@@ -153,27 +153,26 @@ impl Context {
         })
     }
 
-    pub fn target_layout(
+    pub fn target_buffer_layout(
         &self,
         binding: u32,
         visibility: wgpu::ShaderStages,
         read_only: bool,
     ) -> wgpu::BindGroupLayoutEntry {
         self.compute_unit
-            .target_buffer
-            .layout(binding, visibility, read_only)
+            .target_buffer_layout(binding, visibility, read_only)
     }
 
-    pub fn target_binding(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        self.compute_unit.target_buffer.binding(binding)
+    pub fn target_buffer_binding(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+        self.compute_unit.target_buffer_binding(binding)
     }
 
-    pub fn get_target_array_len(&self) -> u32 {
-        self.compute_unit.target_buffer.get_target_array_len()
+    pub fn get_target_buffer_len(&self) -> u32 {
+        self.compute_unit.get_target_buffer_len()
     }
 
-    pub async fn get_target_array(&self, dst: &mut [f32]) -> Result<(), Error> {
-        self.compute_unit.target_buffer.get_target_array(dst).await
+    pub async fn get_target_buffer(&self, dst: &mut [f32]) -> Result<(), Error> {
+        self.compute_unit.get_target_buffer(dst).await
     }
 
     pub fn clear_buffer(&mut self) {
@@ -400,6 +399,22 @@ impl Camera {
             2.0 * self.lens_radius,
             self.focus_dist,
         );
+    }
+
+    pub fn set_aspect_ratio(&mut self, aspect_ratio: f32) {
+        *self = Camera::new(
+            self.lookfrom,
+            self.lookat,
+            self.vup,
+            aspect_ratio,
+            self.vfov,
+            2.0 * self.lens_radius,
+            self.focus_dist,
+        );
+    }
+
+    pub fn get_aspect_ratio(&self) -> f32 {
+        self.aspect_ratio
     }
 }
 
