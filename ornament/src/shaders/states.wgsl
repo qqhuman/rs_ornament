@@ -1,7 +1,5 @@
 struct DynamicState {
     current_iteration : f32,
-    iterations: u32,
-    reset_accumulation_buf: u32
 }
 
 struct ConstantState {

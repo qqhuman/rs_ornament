@@ -2,6 +2,26 @@ use std::time::{Duration, Instant};
 
 use wgpu::util::DeviceExt;
 
+pub struct Timer {
+    begin_frame: Instant,
+    delta_time: Duration,
+}
+
+impl Timer {
+    pub fn start() -> Self {
+        Self {
+            begin_frame: Instant::now(),
+            delta_time: Duration::ZERO,
+        }
+    }
+
+    pub fn end(mut self, frames: u32) {
+        self.delta_time += self.begin_frame.elapsed();
+        println!("Iterations: {:?} = {:?}", frames as u32, self.delta_time);
+        self.delta_time = Duration::ZERO
+    }
+}
+
 pub struct FpsCounter {
     begin_frame: Instant,
     delta_time: Duration,

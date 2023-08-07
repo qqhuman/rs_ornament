@@ -221,23 +221,10 @@ impl Context {
     }
 
     pub fn render(&mut self) {
-        let mut encoder =
-            self.compute_unit
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Path Tracer Encoder"),
-                });
-
-        self.render_with_encoder(&mut encoder);
-        self.compute_unit
-            .queue
-            .submit(std::iter::once(encoder.finish()));
-        self.compute_unit.device.poll(wgpu::Maintain::Wait);
-    }
-
-    pub fn render_with_encoder(&mut self, encoder: &mut wgpu::CommandEncoder) {
-        self.compute_unit.update(&mut self.state, &mut self.scene);
-        self.compute_unit.render_with_encoder(encoder);
+        for _ in 0..self.state.iterations {
+            self.compute_unit.update(&mut self.state, &mut self.scene);
+            self.compute_unit.render();
+        }
     }
 }
 

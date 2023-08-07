@@ -1,5 +1,5 @@
-const WIDTH: u32 = 1920 / 2;
-const HEIGHT: u32 = 1080 / 2;
+const WIDTH: u32 = 1920;
+const HEIGHT: u32 = 1080;
 const DEPTH: u32 = 10;
 
 fn main() {
@@ -7,8 +7,7 @@ fn main() {
 }
 
 async fn run() {
-    let mut fps_counter = util::FpsCounter::new();
-    let scene = examples::random_scene_mix_meshes_and_spheres(WIDTH, HEIGHT);
+    let scene = examples::random_scene_with_3_lucy(WIDTH, HEIGHT);
     let mut context_properties = ornament::ContextProperties::new_with_priorities(vec![
         ornament::Backend::Dx12,
         ornament::Backend::Vulkan,
@@ -26,33 +25,25 @@ async fn run() {
     path_tracer.set_depth(DEPTH);
     path_tracer.set_flip_y(true);
     path_tracer.set_gamma(2.2);
+    for i in [1, 4, 20, 75, 900] {
+        let timer = util::Timer::start();
+        path_tracer.set_iterations(i);
+        path_tracer.render();
+        timer.end(i);
+    }
 
     let mut floats = vec![];
     floats.resize(path_tracer.get_target_array_len() as usize, 0.0);
+    path_tracer
+        .get_target_array(floats.as_mut_slice())
+        .await
+        .unwrap();
+    let bytes = floats
+        .iter()
+        .map(|f| f32::clamp(f * 255.0, 0.0, 255.0) as u8)
+        .collect();
 
-    let mut iterations = 0;
-    for i in [1, 4, 20, 75] {
-        fps_counter.start_frame();
-        path_tracer.set_iterations(i);
-        path_tracer.render();
-        fps_counter.end_frames(i);
-        iterations += i;
-
-        path_tracer
-            .get_target_array(floats.as_mut_slice())
-            .await
-            .unwrap();
-        let bytes = floats
-            .iter()
-            .map(|f| f32::clamp(f * 255.0, 0.0, 255.0) as u8)
-            .collect();
-
-        let image_buffer =
-            image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_vec(WIDTH, HEIGHT, bytes).unwrap();
-        let mut path = String::new();
-        path.push_str("target/image_iterations_");
-        path.push_str(iterations.to_string().as_str());
-        path.push_str(".png");
-        image_buffer.save(path).unwrap();
-    }
+    let image_buffer =
+        image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_vec(WIDTH, HEIGHT, bytes).unwrap();
+    image_buffer.save("target/image.png").unwrap();
 }

@@ -334,16 +334,20 @@ impl Unit {
             self.reset();
         }
 
-        self.dynamic_state.add_iterations(state.iterations);
+        self.dynamic_state.next_iteration();
         self.queue.write_buffer(
             &self.dynamic_state_buffer.handle(),
             0,
             bytemuck::cast_slice(&[self.dynamic_state]),
         );
-        self.dynamic_state.disable_reset_accumulation_buf();
     }
 
-    pub fn render_with_encoder(&mut self, encoder: &mut wgpu::CommandEncoder) {
+    pub fn render(&mut self) {
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("ornament_render_encoder"),
+            });
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("ornament_render_pass"),
         });
@@ -354,6 +358,8 @@ impl Unit {
         }
         pass.dispatch_workgroups(self.workgroups, 1, 1);
         drop(pass);
+        self.queue.submit(std::iter::once(encoder.finish()));
+        self.device.poll(wgpu::Maintain::Wait);
     }
 }
 
@@ -361,31 +367,21 @@ impl Unit {
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct DynamicState {
     current_iteration: f32,
-    iterations: u32,
-    reset_accumulation_buf: u32,
 }
 
 impl DynamicState {
     pub fn new() -> Self {
         Self {
             current_iteration: 0.0,
-            iterations: 1,
-            reset_accumulation_buf: 1,
         }
     }
 
-    pub fn add_iterations(&mut self, iterations: u32) {
-        self.iterations = iterations;
-        self.current_iteration += iterations as f32;
+    pub fn next_iteration(&mut self) {
+        self.current_iteration += 1.0;
     }
 
     pub fn reset(&mut self) {
         self.current_iteration = 0.0;
-        self.reset_accumulation_buf = 1;
-    }
-
-    pub fn disable_reset_accumulation_buf(&mut self) {
-        self.reset_accumulation_buf = 0;
     }
 }
 

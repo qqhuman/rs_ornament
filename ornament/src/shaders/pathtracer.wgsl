@@ -15,23 +15,21 @@
 
 @compute @workgroup_size(64, 1, 1)
 fn main(@builtin(global_invocation_id) invocation_id : vec3<u32>) {
-    if invocation_id.x < arrayLength(&framebuffer) {
+    if invocation_id.x < arrayLength(&accumulation_buffer) {
         // init data
         init_rng_state(invocation_id.x);
         let dimensions = vec2<u32>(constant_state.width, constant_state.height);
         let xy = vec2<u32>(invocation_id.x % dimensions.x, invocation_id.x / dimensions.x);
-        var accumulated_rgba: vec4<f32> = vec4<f32>(0.0);
-        for (var i = 0u; i < dynamic_state.iterations; i = i + 1u) {
-            // trace ray
-            let u = (f32(xy.x) + random_f32()) / f32(dimensions.x - 1u);
-            let v = (f32(xy.y) + random_f32()) / f32(dimensions.y - 1u);
-            let r = camera_get_ray(u, v);
-            var rgb = ray_color(r);
-            rgb = clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0));
-            accumulated_rgba = accumulated_rgba + vec4<f32>(rgb, 1.0);
-        }
         
-        if dynamic_state.reset_accumulation_buf < 1u {
+        // trace ray
+        let u = (f32(xy.x) + random_f32()) / f32(dimensions.x - 1u);
+        let v = (f32(xy.y) + random_f32()) / f32(dimensions.y - 1u);
+        let r = camera_get_ray(u, v);
+        var rgb = ray_color(r);
+        rgb = clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+        var accumulated_rgba = vec4<f32>(rgb, 1.0);
+        
+        if dynamic_state.current_iteration > 1.0 {
             accumulated_rgba = accumulation_buffer[invocation_id.x] + accumulated_rgba;
         }
 
