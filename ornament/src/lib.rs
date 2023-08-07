@@ -221,9 +221,15 @@ impl Context {
     }
 
     pub fn render(&mut self) {
-        for _ in 0..self.state.iterations {
+        if self.state.iterations > 1 {
+            for _ in 0..self.state.iterations {
+                self.compute_unit.update(&mut self.state, &mut self.scene);
+                self.compute_unit.render();
+            }
+            self.compute_unit.post_processing();
+        } else {
             self.compute_unit.update(&mut self.state, &mut self.scene);
-            self.compute_unit.render();
+            self.compute_unit.render_and_apply_post_processing();
         }
     }
 }

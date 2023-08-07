@@ -16,7 +16,9 @@ pub(super) struct Unit {
     pub target_buffer: TargetBuffer,
 
     workgroups: u32,
-    pipeline: wgpu::ComputePipeline,
+    render_pipeline: wgpu::ComputePipeline,
+    post_processing_pipeline: wgpu::ComputePipeline,
+    render_and_post_processing_pipeline: wgpu::ComputePipeline,
     bind_groups: Vec<wgpu::BindGroup>,
 
     // rng buffer
@@ -274,12 +276,28 @@ impl Unit {
             source: wgpu::ShaderSource::Wgsl((&code).into()),
         });
 
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("ornament_pipeline"),
+        let render_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("ornament_render_pipeline"),
             layout: Some(&pipeline_layout),
             module: &module,
-            entry_point: "main",
+            entry_point: "main_render",
         });
+
+        let post_processing_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("ornament_post_processing_pipeline"),
+                layout: Some(&pipeline_layout),
+                module: &module,
+                entry_point: "main_post_processing",
+            });
+
+        let render_and_post_processing_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("ornament_render_and_post_processing_pipeline"),
+                layout: Some(&pipeline_layout),
+                module: &module,
+                entry_point: "main",
+            });
 
         let pixels = state.width * state.height;
         let workgroups = (pixels / WORKGROUP_SIZE) + (pixels % WORKGROUP_SIZE);
@@ -290,7 +308,9 @@ impl Unit {
             target_buffer,
             workgroups,
             _rng_state_buffer: rng_state_buffer,
-            pipeline,
+            render_pipeline,
+            post_processing_pipeline,
+            render_and_post_processing_pipeline,
             dynamic_state,
             dynamic_state_buffer,
             constant_state_buffer,
@@ -352,7 +372,47 @@ impl Unit {
             label: Some("ornament_render_pass"),
         });
 
-        pass.set_pipeline(&self.pipeline);
+        pass.set_pipeline(&self.render_pipeline);
+        for (pos, bg) in self.bind_groups.iter().enumerate() {
+            pass.set_bind_group(pos as u32, bg, &[]);
+        }
+        pass.dispatch_workgroups(self.workgroups, 1, 1);
+        drop(pass);
+        self.queue.submit(std::iter::once(encoder.finish()));
+        self.device.poll(wgpu::Maintain::Wait);
+    }
+
+    pub fn post_processing(&mut self) {
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("ornament_post_processing_encoder"),
+            });
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("ornament_post_processing_pass"),
+        });
+
+        pass.set_pipeline(&self.post_processing_pipeline);
+        for (pos, bg) in self.bind_groups.iter().enumerate() {
+            pass.set_bind_group(pos as u32, bg, &[]);
+        }
+        pass.dispatch_workgroups(self.workgroups, 1, 1);
+        drop(pass);
+        self.queue.submit(std::iter::once(encoder.finish()));
+        self.device.poll(wgpu::Maintain::Wait);
+    }
+
+    pub fn render_and_apply_post_processing(&mut self) {
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("ornament_render_and_post_processing_encoder"),
+            });
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("ornament_render_and_post_processing_pass"),
+        });
+
+        pass.set_pipeline(&self.render_and_post_processing_pipeline);
         for (pos, bg) in self.bind_groups.iter().enumerate() {
             pass.set_bind_group(pos as u32, bg, &[]);
         }

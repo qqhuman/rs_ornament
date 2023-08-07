@@ -14,39 +14,74 @@
 @group(3) @binding(2) var<storage, read> transforms: array<mat4x4<f32>>;
 
 @compute @workgroup_size(64, 1, 1)
+fn main_render(@builtin(global_invocation_id) invocation_id : vec3<u32>) {
+    let invocation_id_x = invocation_id.x;
+    if invocation_id_x >= arrayLength(&accumulation_buffer) {
+        return;
+    }
+
+    init_rng_state(invocation_id_x);
+    let xy = vec2<u32>(invocation_id_x % constant_state.width, invocation_id_x / constant_state.width);
+    accumulation_buffer[invocation_id_x] = render(invocation_id_x, xy);
+    save_rng_state(invocation_id_x);
+}
+
+@compute @workgroup_size(64, 1, 1)
+fn main_post_processing(@builtin(global_invocation_id) invocation_id : vec3<u32>) {
+    let invocation_id_x = invocation_id.x;
+    if invocation_id_x >= arrayLength(&accumulation_buffer) {
+        return;
+    }
+
+    init_rng_state(invocation_id_x);
+    let xy = vec2<u32>(invocation_id_x % constant_state.width, invocation_id_x / constant_state.width);
+    post_processing(invocation_id_x, xy, accumulation_buffer[invocation_id_x]);
+    save_rng_state(invocation_id_x);
+}
+
+@compute @workgroup_size(64, 1, 1)
 fn main(@builtin(global_invocation_id) invocation_id : vec3<u32>) {
-    if invocation_id.x < arrayLength(&accumulation_buffer) {
-        // init data
-        init_rng_state(invocation_id.x);
-        let dimensions = vec2<u32>(constant_state.width, constant_state.height);
-        let xy = vec2<u32>(invocation_id.x % dimensions.x, invocation_id.x / dimensions.x);
-        
-        // trace ray
-        let u = (f32(xy.x) + random_f32()) / f32(dimensions.x - 1u);
-        let v = (f32(xy.y) + random_f32()) / f32(dimensions.y - 1u);
-        let r = camera_get_ray(u, v);
-        var rgb = ray_color(r);
-        rgb = clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0));
-        var accumulated_rgba = vec4<f32>(rgb, 1.0);
-        
-        if dynamic_state.current_iteration > 1.0 {
-            accumulated_rgba = accumulation_buffer[invocation_id.x] + accumulated_rgba;
-        }
+    let invocation_id_x = invocation_id.x;
+    if invocation_id_x >= arrayLength(&accumulation_buffer) {
+        return;
+    }
 
-        var rgba = accumulated_rgba / dynamic_state.current_iteration;
-        rgba.x = pow(rgba.x, constant_state.inverted_gamma);
-        rgba.y = pow(rgba.y, constant_state.inverted_gamma);
-        rgba.z = pow(rgba.z, constant_state.inverted_gamma);
+    init_rng_state(invocation_id_x);
+    let xy = vec2<u32>(invocation_id_x % constant_state.width, invocation_id_x / constant_state.width);
+    let accumulated_rgba = render(invocation_id_x, xy);
+    accumulation_buffer[invocation_id_x] = accumulated_rgba;
+    post_processing(invocation_id_x, xy, accumulated_rgba);
+    save_rng_state(invocation_id_x);
+}
 
-        // store data
-        accumulation_buffer[invocation_id.x] = accumulated_rgba;
-        if constant_state.flip_y < 1u {
-            framebuffer[invocation_id.x] = rgba;
-        } else {
-            let y_flipped = dimensions.y - xy.y - 1u;
-            framebuffer[dimensions.x * y_flipped + xy.x] = rgba;
-        }
-        save_rng_state(invocation_id.x);
+fn render(invocation_id_x: u32, xy: vec2<u32>) -> vec4<f32> {
+    let u = (f32(xy.x) + random_f32()) / f32(constant_state.width - 1u);
+    let v = (f32(xy.y) + random_f32()) / f32(constant_state.height - 1u);
+    // mock tracing
+    // var rgb = vec3<f32>(u, v, 0.0);
+    // var accumulated_rgba = vec4<f32>(rgb, 1.0);
+    let r = camera_get_ray(u, v);
+    var rgb = ray_color(r);
+    rgb = clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+    var accumulated_rgba = vec4<f32>(rgb, 1.0);
+    
+    if dynamic_state.current_iteration > 1.0 {
+        accumulated_rgba = accumulation_buffer[invocation_id_x] + accumulated_rgba;
+    }
+
+    return accumulated_rgba;
+}
+
+fn post_processing(invocation_id_x: u32, xy: vec2<u32>, accumulated_rgba: vec4<f32>) {
+    var rgba = accumulated_rgba / dynamic_state.current_iteration;
+    rgba.x = pow(rgba.x, constant_state.inverted_gamma);
+    rgba.y = pow(rgba.y, constant_state.inverted_gamma);
+    rgba.z = pow(rgba.z, constant_state.inverted_gamma);
+    if constant_state.flip_y < 1u {
+        framebuffer[invocation_id_x] = rgba;
+    } else {
+        let y_flipped = constant_state.height - xy.y - 1u;
+        framebuffer[constant_state.width * y_flipped + xy.x] = rgba;
     }
 }
 
