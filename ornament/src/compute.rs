@@ -618,7 +618,7 @@ impl UniformBuffer {
 }
 
 const TARGET_PIXEL_COMPONENTS: u32 = 4;
-pub struct TargetBuffer {
+struct TargetBuffer {
     device: Rc<wgpu::Device>,
     queue: Rc<wgpu::Queue>,
     buffer: StorageBuffer,
