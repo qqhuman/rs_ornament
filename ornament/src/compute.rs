@@ -9,18 +9,13 @@ use super::State;
 pub const WORKGROUP_SIZE: u32 = 64;
 
 struct Buffers {
-    // framebuffer/accumulation buffer
     target: TargetBuffer,
-    // rng buffer
     rng_state: StorageBuffer,
-    // dynamic state/constant state/camera
     dynamic_state: UniformBuffer,
     constant_state: UniformBuffer,
     camera: UniformBuffer,
-    // materials/bvh nodes
     materials: StorageBuffer,
     bvh_nodes: StorageBuffer,
-    // normals/normals indices/transforms
     normals: StorageBuffer,
     normal_indices: StorageBuffer,
     transforms: StorageBuffer,
@@ -200,7 +195,7 @@ impl Unit {
         {
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("ornament_storage_buffers_bgl"),
+                    label: Some("ornament_target_bgl"),
                     entries: &[
                         buffers
                             .target
@@ -218,7 +213,7 @@ impl Unit {
                 });
 
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("ornament_storage_buffers_bg"),
+                label: Some("ornament_target_bg"),
                 layout: &bind_group_layout,
                 entries: &[
                     buffers.target.buffer.binding(0),
