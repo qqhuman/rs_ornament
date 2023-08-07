@@ -243,6 +243,10 @@ impl State {
             self.size = new_size;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
+
+            // bug in wgpu with DX12 backend
+            // we have to call device.poo(wait)
+            self.device.poll(wgpu::Maintain::Wait);
             self.surface.configure(&self.device, &self.config);
         }
     }
