@@ -54,7 +54,7 @@ impl FpsCounter {
 }
 
 pub struct UniformBuffer {
-    pub handle: wgpu::Buffer,
+    handle: wgpu::Buffer,
 }
 
 impl UniformBuffer {
@@ -90,5 +90,9 @@ impl UniformBuffer {
             binding,
             resource: self.handle.as_entire_binding(),
         }
+    }
+
+    pub fn write(&self, queue: &wgpu::Queue, data: &[u8]) {
+        queue.write_buffer(&self.handle, 0, data);
     }
 }

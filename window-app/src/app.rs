@@ -66,7 +66,6 @@ pub async fn run() {
             state.update();
             match state.render() {
                 Ok(_) => {}
-                // Reconfigure the surface if lost
                 Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
                 // The system is out of memory, we should probably quit
                 Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
@@ -182,9 +181,8 @@ impl State {
             // bug in wgpu with DX12 backend
             // we have to call device.poo(wait)
             self.device.poll(wgpu::Maintain::Wait);
-            self.queue.write_buffer(
-                &self.dimensions_buffer.handle,
-                0,
+            self.dimensions_buffer.write(
+                &self.queue,
                 bytemuck::cast_slice(&[new_size.width, new_size.height]),
             );
 
@@ -266,11 +264,8 @@ impl State {
                         strip_index_format: None,
                         front_face: wgpu::FrontFace::Ccw,
                         cull_mode: Some(wgpu::Face::Back),
-                        // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                         polygon_mode: wgpu::PolygonMode::Fill,
-                        // Requires Features::DEPTH_CLIP_CONTROL
                         unclipped_depth: false,
-                        // Requires Features::CONSERVATIVE_RASTERIZATION
                         conservative: false,
                     },
                     depth_stencil: None,
@@ -325,7 +320,6 @@ impl State {
         render_pass.draw(0..3, 0..1);
         drop(render_pass);
 
-        // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 

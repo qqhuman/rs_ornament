@@ -410,9 +410,8 @@ impl Unit {
         if scene.camera.dirty {
             dirty = true;
             scene.camera.dirty = false;
-            self.queue.write_buffer(
-                &self.buffers.camera.handle(),
-                0,
+            self.buffers.camera.write(
+                &self.queue,
                 bytemuck::cast_slice(&[gpu_structs::Camera::from(&scene.camera)]),
             );
         }
@@ -420,9 +419,8 @@ impl Unit {
         if state.dirty {
             dirty = true;
             state.dirty = false;
-            self.queue.write_buffer(
-                &self.buffers.constant_state.handle(),
-                0,
+            self.buffers.constant_state.write(
+                &self.queue,
                 bytemuck::cast_slice(&[gpu_structs::ConstantState::from(&state)]),
             );
         }
@@ -432,11 +430,9 @@ impl Unit {
         }
 
         self.dynamic_state.next_iteration();
-        self.queue.write_buffer(
-            &self.buffers.dynamic_state.handle(),
-            0,
-            bytemuck::cast_slice(&[self.dynamic_state]),
-        );
+        self.buffers
+            .dynamic_state
+            .write(&self.queue, bytemuck::cast_slice(&[self.dynamic_state]));
     }
 
     pub fn render(&mut self) {
@@ -526,7 +522,7 @@ impl DynamicState {
 }
 
 pub struct StorageBuffer {
-    pub handle: wgpu::Buffer,
+    handle: wgpu::Buffer,
 }
 
 impl StorageBuffer {
@@ -606,10 +602,6 @@ impl UniformBuffer {
         Self { handle }
     }
 
-    pub fn handle(&self) -> &wgpu::Buffer {
-        &self.handle
-    }
-
     pub fn layout(
         &self,
         binding: u32,
@@ -632,6 +624,10 @@ impl UniformBuffer {
             binding,
             resource: self.handle.as_entire_binding(),
         }
+    }
+
+    pub fn write(&self, queue: &wgpu::Queue, data: &[u8]) {
+        queue.write_buffer(&self.handle, 0, data);
     }
 }
 

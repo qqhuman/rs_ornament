@@ -86,10 +86,7 @@ impl Context {
             .map_err(|_| Error::RequestDevice)
     }
 
-    pub async fn create(
-        scene: Scene,
-        properties: ContextProperties,
-    ) -> Result<Context, Error> {
+    pub async fn create(scene: Scene, properties: ContextProperties) -> Result<Context, Error> {
         let priorities = if properties.backends_priorities.is_empty() {
             Backend::iter().collect()
         } else {
@@ -119,11 +116,7 @@ impl Context {
 
             match Self::request_device(backend, limits).await {
                 Ok((device, queue)) => {
-                    return Self::from_device_and_queue(
-                        Rc::new(device),
-                        Rc::new(queue),
-                        scene,
-                    );
+                    return Self::from_device_and_queue(Rc::new(device), Rc::new(queue), scene);
                 }
                 Err(err) if first_error.is_none() => first_error = Some(err),
                 _ => {}
