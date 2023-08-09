@@ -26,7 +26,7 @@ async fn run() {
     path_tracer.set_depth(DEPTH);
     path_tracer.set_flip_y(true);
     path_tracer.set_gamma(2.2);
-    for i in [1, 4, 20, 75, 900] {
+    for i in [1, 4, 20, 75] {
         let timer = util::Timer::start();
         path_tracer.set_iterations(i);
         path_tracer.render();

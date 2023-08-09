@@ -501,7 +501,7 @@ impl Unit {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct DynamicState {
+struct DynamicState {
     current_iteration: f32,
 }
 
@@ -521,7 +521,7 @@ impl DynamicState {
     }
 }
 
-pub struct StorageBuffer {
+struct StorageBuffer {
     handle: wgpu::Buffer,
 }
 
@@ -577,7 +577,7 @@ impl StorageBuffer {
     }
 }
 
-pub struct UniformBuffer {
+struct UniformBuffer {
     handle: wgpu::Buffer,
 }
 
