@@ -1,25 +1,12 @@
-use std::{mem, rc::Rc};
+use std::{cell::OnceCell, mem, rc::Rc};
 
 use wgpu::util::DeviceExt;
 
-use crate::{bvh, gpu_structs, Error, Scene};
+use crate::{bvh, gpu_structs, util::OnceCellExt, Error, Scene};
 
 use super::State;
 
-pub const WORKGROUP_SIZE: u32 = 64;
-
-struct Buffers {
-    target: TargetBuffer,
-    rng_state: StorageBuffer,
-    dynamic_state: UniformBuffer,
-    constant_state: UniformBuffer,
-    camera: UniformBuffer,
-    materials: StorageBuffer,
-    bvh_nodes: StorageBuffer,
-    normals: StorageBuffer,
-    normal_indices: StorageBuffer,
-    transforms: StorageBuffer,
-}
+pub const WORKGROUP_SIZE: u32 = 256;
 
 struct Pipelines {
     render_pipeline: wgpu::ComputePipeline,
@@ -31,10 +18,12 @@ struct Pipelines {
 pub(super) struct Unit {
     pub device: Rc<wgpu::Device>,
     pub queue: Rc<wgpu::Queue>,
-    workgroups: u32,
     dynamic_state: DynamicState,
     buffers: Buffers,
-    pipelines: Pipelines,
+    shader_module: wgpu::ShaderModule,
+    pipelines: OnceCell<Pipelines>,
+    width: u32,
+    height: u32,
 }
 
 impl Unit {
@@ -59,12 +48,6 @@ impl Unit {
             normal_indices.push(Default::default())
         }
 
-        let (target_buffer, rng_state_buffer) = Self::create_target_and_rng_buffers(
-            device.clone(),
-            queue.clone(),
-            state.width,
-            state.height,
-        );
         let dynamic_state = DynamicState::new();
         let (dynamic_state_buffer, constant_state_buffer, camera_buffer) = {
             let dynamic_state_buffer = UniformBuffer::new_from_bytes(
@@ -90,48 +73,49 @@ impl Unit {
             (dynamic_state_buffer, constant_state_buffer, camera_buffer)
         };
         let buffers = Buffers {
-            target: target_buffer,
-            rng_state: rng_state_buffer,
+            target: OnceCell::new(),
             dynamic_state: dynamic_state_buffer,
             constant_state: constant_state_buffer,
             camera: camera_buffer,
             materials: Self::create_materials_buffer(device.clone(), materials),
-            normals: Self::create_normals_buffer(device.clone(), normals),
-            normal_indices: Self::create_normal_indices_buffer(device.clone(), normal_indices),
-            transforms: Self::create_transforms_buffer(device.clone(), transforms),
-            bvh_nodes: Self::create_bvh_nodes_buffer(device.clone(), bvh_nodes),
+            bvh: BvhBuffers {
+                normals: Self::create_normals_buffer(device.clone(), normals),
+                normal_indices: Self::create_normal_indices_buffer(device.clone(), normal_indices),
+                transforms: Self::create_transforms_buffer(device.clone(), transforms),
+                nodes: Self::create_bvh_nodes_buffer(device.clone(), bvh_nodes),
+            },
         };
 
-        let pixels = state.width * state.height;
-        let workgroups = (pixels / WORKGROUP_SIZE) + (pixels % WORKGROUP_SIZE);
-        let pipelines = Self::create_pipelines(&buffers, device.clone());
+        let code = [
+            include_str!("shaders/bvh.wgsl"),
+            include_str!("shaders/pathtracer.wgsl"),
+            include_str!("shaders/camera.wgsl"),
+            include_str!("shaders/hitrecord.wgsl"),
+            include_str!("shaders/material.wgsl"),
+            include_str!("shaders/random.wgsl"),
+            include_str!("shaders/ray.wgsl"),
+            include_str!("shaders/sphere.wgsl"),
+            include_str!("shaders/states.wgsl"),
+            include_str!("shaders/transform.wgsl"),
+            include_str!("shaders/utility.wgsl"),
+        ]
+        .join("\n");
+
+        let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("ornament_module"),
+            source: wgpu::ShaderSource::Wgsl((&code).into()),
+        });
 
         Ok(Self {
             device,
             queue,
-            workgroups,
             dynamic_state,
             buffers,
-            pipelines,
+            shader_module,
+            pipelines: OnceCell::new(),
+            width: state.width,
+            height: state.height,
         })
-    }
-
-    fn create_target_and_rng_buffers(
-        device: Rc<wgpu::Device>,
-        queue: Rc<wgpu::Queue>,
-        width: u32,
-        height: u32,
-    ) -> (TargetBuffer, StorageBuffer) {
-        let target_buffer = TargetBuffer::new(device.clone(), queue.clone(), width, height);
-
-        let rng_seed = (0..(width * height)).collect::<Vec<_>>();
-        let rng_state_buffer = StorageBuffer::new_from_bytes(
-            &device,
-            bytemuck::cast_slice(rng_seed.as_slice()),
-            Some("ornament_rng_state_buffer"),
-        );
-
-        (target_buffer, rng_state_buffer)
     }
 
     fn create_materials_buffer(
@@ -189,180 +173,203 @@ impl Unit {
         )
     }
 
-    fn create_pipelines(buffers: &Buffers, device: Rc<wgpu::Device>) -> Pipelines {
-        let mut bind_group_layouts = vec![];
-        let mut bind_groups = vec![];
-        {
-            let bind_group_layout =
-                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("ornament_target_bgl"),
+    fn get_or_create_target_buffer(&self) -> &TargetBuffer {
+        self.buffers.target.get_or_init(|| {
+            TargetBuffer::new(
+                self.device.clone(),
+                self.queue.clone(),
+                self.width,
+                self.height,
+            )
+        })
+    }
+
+    fn get_workgoups(&self) -> u32 {
+        self.get_or_create_target_buffer().workgroups
+    }
+
+    fn get_or_create_pipelines(&self) -> &Pipelines {
+        self.pipelines.get_or_init(|| {
+            let target_buffer = self.get_or_create_target_buffer();
+            let mut bind_group_layouts = vec![];
+            let mut bind_groups = vec![];
+            {
+                let bind_group_layout =
+                    self.device
+                        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                            label: Some("ornament_target_bgl"),
+                            entries: &[
+                                target_buffer
+                                    .buffer
+                                    .layout(0, wgpu::ShaderStages::COMPUTE, false),
+                                target_buffer.accumulation_buffer.layout(
+                                    1,
+                                    wgpu::ShaderStages::COMPUTE,
+                                    false,
+                                ),
+                                target_buffer.rng_state_buffer.layout(
+                                    2,
+                                    wgpu::ShaderStages::COMPUTE,
+                                    false,
+                                ),
+                            ],
+                        });
+
+                let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("ornament_target_bg"),
+                    layout: &bind_group_layout,
                     entries: &[
-                        buffers
-                            .target
-                            .buffer
-                            .layout(0, wgpu::ShaderStages::COMPUTE, false),
-                        buffers.target.accumulation_buffer.layout(
-                            1,
-                            wgpu::ShaderStages::COMPUTE,
-                            false,
-                        ),
-                        buffers
-                            .rng_state
-                            .layout(2, wgpu::ShaderStages::COMPUTE, false),
+                        target_buffer.buffer.binding(0),
+                        target_buffer.accumulation_buffer.binding(1),
+                        target_buffer.rng_state_buffer.binding(2),
                     ],
                 });
 
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("ornament_target_bg"),
-                layout: &bind_group_layout,
-                entries: &[
-                    buffers.target.buffer.binding(0),
-                    buffers.target.accumulation_buffer.binding(1),
-                    buffers.rng_state.binding(2),
-                ],
-            });
+                bind_group_layouts.push(bind_group_layout);
+                bind_groups.push(bind_group);
+            }
+            {
+                let bind_group_layout =
+                    self.device
+                        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                            entries: &[
+                                self.buffers
+                                    .dynamic_state
+                                    .layout(0, wgpu::ShaderStages::COMPUTE),
+                                self.buffers
+                                    .constant_state
+                                    .layout(1, wgpu::ShaderStages::COMPUTE),
+                                self.buffers.camera.layout(2, wgpu::ShaderStages::COMPUTE),
+                            ],
+                            label: Some("ornament_dynstate__conststate__camera_bgl"),
+                        });
 
-            bind_group_layouts.push(bind_group_layout);
-            bind_groups.push(bind_group);
-        }
-        {
-            let bind_group_layout =
-                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    layout: &bind_group_layout,
                     entries: &[
-                        buffers.dynamic_state.layout(0, wgpu::ShaderStages::COMPUTE),
-                        buffers
-                            .constant_state
-                            .layout(1, wgpu::ShaderStages::COMPUTE),
-                        buffers.camera.layout(2, wgpu::ShaderStages::COMPUTE),
+                        self.buffers.dynamic_state.binding(0),
+                        self.buffers.constant_state.binding(1),
+                        self.buffers.camera.binding(2),
                     ],
-                    label: Some("ornament_dynstate__conststate__camera_bgl"),
+                    label: Some("ornament_dynstate__conststate__camera_bg"),
                 });
 
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &bind_group_layout,
-                entries: &[
-                    buffers.dynamic_state.binding(0),
-                    buffers.constant_state.binding(1),
-                    buffers.camera.binding(2),
-                ],
-                label: Some("ornament_dynstate__conststate__camera_bg"),
-            });
+                bind_group_layouts.push(bind_group_layout);
+                bind_groups.push(bind_group);
+            }
 
-            bind_group_layouts.push(bind_group_layout);
-            bind_groups.push(bind_group);
-        }
+            {
+                let bind_group_layout =
+                    self.device
+                        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                            label: Some("ornament_materials__bvh_nodes_bgl"),
+                            entries: &[
+                                self.buffers
+                                    .materials
+                                    .layout(0, wgpu::ShaderStages::COMPUTE, true),
+                                self.buffers
+                                    .bvh
+                                    .nodes
+                                    .layout(1, wgpu::ShaderStages::COMPUTE, true),
+                            ],
+                        });
 
-        {
-            let bind_group_layout =
-                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("ornament_materials__bvh_nodes_bgl"),
+                let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("ornament_materials__bvh_nodes_bg"),
+                    layout: &bind_group_layout,
                     entries: &[
-                        buffers
-                            .materials
-                            .layout(0, wgpu::ShaderStages::COMPUTE, true),
-                        buffers
-                            .bvh_nodes
-                            .layout(1, wgpu::ShaderStages::COMPUTE, true),
-                    ],
-                });
-
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("ornament_materials__bvh_nodes_bg"),
-                layout: &bind_group_layout,
-                entries: &[buffers.materials.binding(0), buffers.bvh_nodes.binding(1)],
-            });
-
-            bind_group_layouts.push(bind_group_layout);
-            bind_groups.push(bind_group);
-        };
-
-        {
-            let bind_group_layout =
-                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("ornament_normals__normals_indices__transforms_bgl"),
-                    entries: &[
-                        buffers.normals.layout(0, wgpu::ShaderStages::COMPUTE, true),
-                        buffers
-                            .normal_indices
-                            .layout(1, wgpu::ShaderStages::COMPUTE, true),
-                        buffers
-                            .transforms
-                            .layout(2, wgpu::ShaderStages::COMPUTE, true),
+                        self.buffers.materials.binding(0),
+                        self.buffers.bvh.nodes.binding(1),
                     ],
                 });
 
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("ornament_normals__normals_indices__transforms_bg"),
-                layout: &bind_group_layout,
-                entries: &[
-                    buffers.normals.binding(0),
-                    buffers.normal_indices.binding(1),
-                    buffers.transforms.binding(2),
-                ],
-            });
+                bind_group_layouts.push(bind_group_layout);
+                bind_groups.push(bind_group);
+            };
 
-            bind_group_layouts.push(bind_group_layout);
-            bind_groups.push(bind_group);
-        };
+            {
+                let bind_group_layout =
+                    self.device
+                        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                            label: Some("ornament_normals__normals_indices__transforms_bgl"),
+                            entries: &[
+                                self.buffers.bvh.normals.layout(
+                                    0,
+                                    wgpu::ShaderStages::COMPUTE,
+                                    true,
+                                ),
+                                self.buffers.bvh.normal_indices.layout(
+                                    1,
+                                    wgpu::ShaderStages::COMPUTE,
+                                    true,
+                                ),
+                                self.buffers.bvh.transforms.layout(
+                                    2,
+                                    wgpu::ShaderStages::COMPUTE,
+                                    true,
+                                ),
+                            ],
+                        });
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("ornament_pipeline_layout"),
-            bind_group_layouts: bind_group_layouts
-                .iter()
-                .collect::<Vec<&wgpu::BindGroupLayout>>()
-                .as_slice(),
-            push_constant_ranges: &[],
-        });
+                let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("ornament_normals__normals_indices__transforms_bg"),
+                    layout: &bind_group_layout,
+                    entries: &[
+                        self.buffers.bvh.normals.binding(0),
+                        self.buffers.bvh.normal_indices.binding(1),
+                        self.buffers.bvh.transforms.binding(2),
+                    ],
+                });
 
-        let code = [
-            include_str!("shaders/bvh.wgsl"),
-            include_str!("shaders/pathtracer.wgsl"),
-            include_str!("shaders/camera.wgsl"),
-            include_str!("shaders/hitrecord.wgsl"),
-            include_str!("shaders/material.wgsl"),
-            include_str!("shaders/random.wgsl"),
-            include_str!("shaders/ray.wgsl"),
-            include_str!("shaders/sphere.wgsl"),
-            include_str!("shaders/states.wgsl"),
-            include_str!("shaders/transform.wgsl"),
-            include_str!("shaders/utility.wgsl"),
-        ]
-        .join("\n");
+                bind_group_layouts.push(bind_group_layout);
+                bind_groups.push(bind_group);
+            };
 
-        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("ornament_module"),
-            source: wgpu::ShaderSource::Wgsl((&code).into()),
-        });
+            let pipeline_layout =
+                self.device
+                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("ornament_pipeline_layout"),
+                        bind_group_layouts: bind_group_layouts
+                            .iter()
+                            .collect::<Vec<&wgpu::BindGroupLayout>>()
+                            .as_slice(),
+                        push_constant_ranges: &[],
+                    });
 
-        let render_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("ornament_render_pipeline"),
-            layout: Some(&pipeline_layout),
-            module: &module,
-            entry_point: "main_render",
-        });
+            let render_pipeline =
+                self.device
+                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                        label: Some("ornament_render_pipeline"),
+                        layout: Some(&pipeline_layout),
+                        module: &self.shader_module,
+                        entry_point: "main_render",
+                    });
 
-        let post_processing_pipeline =
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("ornament_post_processing_pipeline"),
-                layout: Some(&pipeline_layout),
-                module: &module,
-                entry_point: "main_post_processing",
-            });
+            let post_processing_pipeline =
+                self.device
+                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                        label: Some("ornament_post_processing_pipeline"),
+                        layout: Some(&pipeline_layout),
+                        module: &self.shader_module,
+                        entry_point: "main_post_processing",
+                    });
 
-        let render_and_post_processing_pipeline =
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("ornament_render_and_post_processing_pipeline"),
-                layout: Some(&pipeline_layout),
-                module: &module,
-                entry_point: "main",
-            });
+            let render_and_post_processing_pipeline =
+                self.device
+                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                        label: Some("ornament_render_and_post_processing_pipeline"),
+                        layout: Some(&pipeline_layout),
+                        module: &self.shader_module,
+                        entry_point: "main",
+                    });
 
-        Pipelines {
-            render_pipeline,
-            post_processing_pipeline,
-            render_and_post_processing_pipeline,
-            bind_groups,
-        }
+            Pipelines {
+                render_pipeline,
+                post_processing_pipeline,
+                render_and_post_processing_pipeline,
+                bind_groups,
+            }
+        })
     }
 
     pub fn target_buffer_layout(
@@ -371,19 +378,27 @@ impl Unit {
         visibility: wgpu::ShaderStages,
         read_only: bool,
     ) -> wgpu::BindGroupLayoutEntry {
-        self.buffers.target.layout(binding, visibility, read_only)
+        self.get_or_create_target_buffer()
+            .layout(binding, visibility, read_only)
     }
 
     pub fn target_buffer_binding(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        self.buffers.target.binding(binding)
+        self.get_or_create_target_buffer().binding(binding)
     }
 
     pub fn get_target_buffer_len(&self) -> u32 {
-        self.buffers.target.get_buffer_len()
+        self.get_or_create_target_buffer().get_buffer_len()
     }
 
     pub async fn get_target_buffer(&self, dst: &mut [f32]) -> Result<(), Error> {
-        self.buffers.target.get_buffer(dst).await
+        self.get_or_create_target_buffer().get_buffer(dst).await
+    }
+
+    pub fn set_target_buffer_resolution(&mut self, width: u32, height: u32) {
+        self.width = width;
+        self.height = height;
+        self.pipelines.invalidate();
+        self.buffers.target.invalidate();
     }
 
     pub fn reset(&mut self) {
@@ -434,11 +449,12 @@ impl Unit {
             label: Some("ornament_render_pass"),
         });
 
-        pass.set_pipeline(&self.pipelines.render_pipeline);
-        for (pos, bg) in self.pipelines.bind_groups.iter().enumerate() {
+        let pipelines = self.get_or_create_pipelines();
+        pass.set_pipeline(&pipelines.render_pipeline);
+        for (pos, bg) in pipelines.bind_groups.iter().enumerate() {
             pass.set_bind_group(pos as u32, bg, &[]);
         }
-        pass.dispatch_workgroups(self.workgroups, 1, 1);
+        pass.dispatch_workgroups(self.get_workgoups(), 1, 1);
         drop(pass);
         self.queue.submit(std::iter::once(encoder.finish()));
         self.device.poll(wgpu::Maintain::Wait);
@@ -454,11 +470,12 @@ impl Unit {
             label: Some("ornament_post_processing_pass"),
         });
 
-        pass.set_pipeline(&self.pipelines.post_processing_pipeline);
-        for (pos, bg) in self.pipelines.bind_groups.iter().enumerate() {
+        let pipelines = self.get_or_create_pipelines();
+        pass.set_pipeline(&pipelines.post_processing_pipeline);
+        for (pos, bg) in pipelines.bind_groups.iter().enumerate() {
             pass.set_bind_group(pos as u32, bg, &[]);
         }
-        pass.dispatch_workgroups(self.workgroups, 1, 1);
+        pass.dispatch_workgroups(self.get_workgoups(), 1, 1);
         drop(pass);
         self.queue.submit(std::iter::once(encoder.finish()));
         self.device.poll(wgpu::Maintain::Wait);
@@ -474,11 +491,12 @@ impl Unit {
             label: Some("ornament_render_and_post_processing_pass"),
         });
 
-        pass.set_pipeline(&self.pipelines.render_and_post_processing_pipeline);
-        for (pos, bg) in self.pipelines.bind_groups.iter().enumerate() {
+        let pipelines = self.get_or_create_pipelines();
+        pass.set_pipeline(&pipelines.render_and_post_processing_pipeline);
+        for (pos, bg) in pipelines.bind_groups.iter().enumerate() {
             pass.set_bind_group(pos as u32, bg, &[]);
         }
-        pass.dispatch_workgroups(self.workgroups, 1, 1);
+        pass.dispatch_workgroups(self.get_workgoups(), 1, 1);
         drop(pass);
         self.queue.submit(std::iter::once(encoder.finish()));
         self.device.poll(wgpu::Maintain::Wait);
@@ -623,10 +641,12 @@ struct TargetBuffer {
     queue: Rc<wgpu::Queue>,
     buffer: StorageBuffer,
     accumulation_buffer: StorageBuffer,
+    rng_state_buffer: StorageBuffer,
     map_buffer: wgpu::Buffer,
     size: u64,
     width: u32,
     height: u32,
+    workgroups: u32,
 }
 
 impl TargetBuffer {
@@ -642,6 +662,13 @@ impl TargetBuffer {
             false,
         );
 
+        let rng_seed = (0..(width * height)).collect::<Vec<_>>();
+        let rng_state_buffer = StorageBuffer::new_from_bytes(
+            &device,
+            bytemuck::cast_slice(rng_seed.as_slice()),
+            Some("ornament_rng_state_buffer"),
+        );
+
         let map_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             size,
@@ -649,15 +676,20 @@ impl TargetBuffer {
             mapped_at_creation: false,
         });
 
+        let pixels = width * height;
+        let workgroups = (pixels / WORKGROUP_SIZE) + (pixels % WORKGROUP_SIZE);
+
         Self {
             device,
             queue,
             buffer,
             accumulation_buffer,
+            rng_state_buffer,
             map_buffer,
             size,
             width,
             height,
+            workgroups,
         }
     }
 
@@ -707,4 +739,20 @@ impl TargetBuffer {
         self.map_buffer.unmap();
         Ok(())
     }
+}
+
+struct Buffers {
+    target: OnceCell<TargetBuffer>,
+    dynamic_state: UniformBuffer,
+    constant_state: UniformBuffer,
+    camera: UniformBuffer,
+    materials: StorageBuffer,
+    bvh: BvhBuffers,
+}
+
+struct BvhBuffers {
+    nodes: StorageBuffer,
+    normals: StorageBuffer,
+    normal_indices: StorageBuffer,
+    transforms: StorageBuffer,
 }

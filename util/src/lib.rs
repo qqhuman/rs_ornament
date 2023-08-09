@@ -54,7 +54,7 @@ impl FpsCounter {
 }
 
 pub struct UniformBuffer {
-    handle: wgpu::Buffer,
+    pub handle: wgpu::Buffer,
 }
 
 impl UniformBuffer {

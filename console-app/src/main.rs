@@ -7,7 +7,7 @@ fn main() {
 }
 
 async fn run() {
-    let scene = examples::random_scene_with_3_lucy(WIDTH, HEIGHT);
+    let scene = examples::random_scene_with_3_lucy(WIDTH as f32 / HEIGHT as f32);
     let mut context_properties = ornament::ContextProperties::new_with_priorities(vec![
         ornament::Backend::Dx12,
         ornament::Backend::Vulkan,
@@ -18,10 +18,11 @@ async fn run() {
     // extend the max storage buffer size from 134MB to 1073MB
     context_properties.max_storage_buffer_binding_size = 128 << 24;
     context_properties.max_buffer_size = 1 << 32;
-    let mut path_tracer = ornament::Context::create(scene, WIDTH, HEIGHT, context_properties)
+    let mut path_tracer = ornament::Context::create(scene, context_properties)
         .await
         .unwrap();
 
+    path_tracer.set_resolution(WIDTH, HEIGHT);
     path_tracer.set_depth(DEPTH);
     path_tracer.set_flip_y(true);
     path_tracer.set_gamma(2.2);

@@ -23,8 +23,7 @@ pub fn length(v: cgmath::Vector3<f32>) -> f32 {
     f32::sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
 }
 
-pub fn random_scene_mix_meshes_and_spheres(width: u32, height: u32) -> Scene {
-    let aspect_ratio = width as f32 / height as f32;
+pub fn random_scene_mix_meshes_and_spheres(aspect_ratio: f32) -> Scene {
     let vfov = 20.0;
     let lookfrom = cgmath::Point3::new(13.0, 2.0, 3.0);
     let lookat = cgmath::Point3::new(0.0, 0.0, 0.0);
@@ -106,8 +105,7 @@ pub fn random_scene_mix_meshes_and_spheres(width: u32, height: u32) -> Scene {
     scene
 }
 
-pub fn random_scene_spheres(width: u32, height: u32) -> Scene {
-    let aspect_ratio = width as f32 / height as f32;
+pub fn random_scene_spheres(aspect_ratio: f32) -> Scene {
     let vfov = 20.0;
     let lookfrom = cgmath::Point3::new(13.0, 2.0, 3.0);
     let lookat = cgmath::Point3::new(0.0, 0.0, 0.0);
@@ -184,8 +182,7 @@ pub fn random_scene_spheres(width: u32, height: u32) -> Scene {
     scene
 }
 
-pub fn random_scene_meshes(width: u32, height: u32) -> Scene {
-    let aspect_ratio = width as f32 / height as f32;
+pub fn random_scene_meshes(aspect_ratio: f32) -> Scene {
     let vfov = 20.0;
     let lookfrom = cgmath::Point3::new(13.0, 2.0, 3.0);
     let lookat = cgmath::Point3::new(0.0, 0.0, 0.0);
@@ -267,8 +264,7 @@ pub fn random_scene_meshes(width: u32, height: u32) -> Scene {
     scene
 }
 
-pub fn random_scene_with_3_lucy(width: u32, height: u32) -> Scene {
-    let aspect_ratio = width as f32 / height as f32;
+pub fn random_scene_with_3_lucy(aspect_ratio: f32) -> Scene {
     let vfov = 20.0;
     let lookfrom = cgmath::Point3::new(13.0, 2.0, 3.0);
     let lookat = cgmath::Point3::new(0.0, 0.0, 0.0);
@@ -374,8 +370,7 @@ pub fn random_scene_with_3_lucy(width: u32, height: u32) -> Scene {
 }
 
 #[cfg(target_os = "windows")]
-pub fn random_scene_with_3_statuette(width: u32, height: u32) -> Scene {
-    let aspect_ratio = width as f32 / height as f32;
+pub fn random_scene_with_3_statuette(aspect_ratio: f32) -> Scene {
     let vfov = 20.0;
     let lookfrom = cgmath::Point3::new(13.0, 2.0, 3.0);
     let lookat = cgmath::Point3::new(0.0, 0.0, 0.0);
@@ -478,8 +473,7 @@ pub fn random_scene_with_3_statuette(width: u32, height: u32) -> Scene {
     scene
 }
 
-pub fn dielectric_test(width: u32, height: u32) -> Scene {
-    let aspect_ratio = width as f32 / height as f32;
+pub fn dielectric_test(aspect_ratio: f32) -> Scene {
     let vfov = 90.0;
     let lookfrom = cgmath::Point3::new(0.0, 0.0, 0.0);
     let lookat = cgmath::Point3::new(0.0, 0.0, -1.0);

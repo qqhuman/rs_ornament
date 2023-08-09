@@ -14,6 +14,7 @@ mod bvh;
 mod compute;
 mod gpu_structs;
 mod math;
+mod util;
 
 pub type RcCell<T> = Rc<RefCell<T>>;
 pub type Color = cgmath::Point3<f32>;
@@ -87,8 +88,6 @@ impl Context {
 
     pub async fn create(
         scene: Scene,
-        width: u32,
-        height: u32,
         properties: ContextProperties,
     ) -> Result<Context, Error> {
         let priorities = if properties.backends_priorities.is_empty() {
@@ -124,8 +123,6 @@ impl Context {
                         Rc::new(device),
                         Rc::new(queue),
                         scene,
-                        width,
-                        height,
                     );
                 }
                 Err(err) if first_error.is_none() => first_error = Some(err),
@@ -140,10 +137,8 @@ impl Context {
         device: Rc<wgpu::Device>,
         queue: Rc<wgpu::Queue>,
         scene: Scene,
-        width: u32,
-        height: u32,
     ) -> Result<Self, Error> {
-        let state = State::new(width, height);
+        let state = State::new(100, 100);
         let compute_unit = compute::Unit::create(device, queue, &scene, &state)?;
 
         Ok(Self {
@@ -213,6 +208,8 @@ impl Context {
 
     pub fn set_resolution(&mut self, width: u32, height: u32) {
         self.state.set_resolution(width, height);
+        self.compute_unit
+            .set_target_buffer_resolution(width, height);
     }
 
     pub fn get_resolution(&self) -> (u32, u32) {

@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{cell::OnceCell, rc::Rc};
 
 use util::{FpsCounter, UniformBuffer};
 use winit::{
@@ -29,7 +29,7 @@ pub async fn run() {
         .with_resizable(RESIZABLE)
         .build(&event_loop)
         .unwrap();
-    let scene = examples::random_scene_spheres(window_size.width as u32, window_size.height as u32);
+    let scene = examples::random_scene_spheres(WIDTH as f32 / HEIGHT as f32);
 
     let mut state = State::new(window, scene).await;
     let mut fps_counter = FpsCounter::new();
@@ -93,9 +93,9 @@ struct State {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
     window: Window,
-    render_pipeline: wgpu::RenderPipeline,
-    bind_group: wgpu::BindGroup,
-    _dimensions_buffer: UniformBuffer,
+    shader_module: wgpu::ShaderModule,
+    render_pipeline: OnceCell<WgpuRenderPipeline>,
+    dimensions_buffer: UniformBuffer,
 }
 
 impl State {
@@ -113,14 +113,8 @@ impl State {
         let device = Rc::new(wgpu_context.device);
         let queue = Rc::new(wgpu_context.queue);
         let surface = wgpu_context.surface;
-        let mut path_tracer = ornament::Context::from_device_and_queue(
-            device.clone(),
-            queue.clone(),
-            scene,
-            size.width,
-            size.height,
-        )
-        .unwrap();
+        let mut path_tracer =
+            ornament::Context::from_device_and_queue(device.clone(), queue.clone(), scene).unwrap();
 
         let surface_caps = surface.get_capabilities(&wgpu_context.adapter);
         let surface_format = surface_caps
@@ -141,79 +135,18 @@ impl State {
         };
         surface.configure(&device, &config);
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("render_shader_module"),
             source: wgpu::ShaderSource::Wgsl(include_str!("texture.wgsl").into()),
         });
 
-        let (width, height) = path_tracer.get_resolution();
         let dimensions_buffer = UniformBuffer::new_from_bytes(
             &device,
-            bytemuck::cast_slice(&[width, height]),
+            bytemuck::cast_slice(&[size.width, size.height]),
             Some("render_dimensions_buffer"),
         );
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("render_bgl"),
-            entries: &[
-                path_tracer.target_buffer_layout(0, wgpu::ShaderStages::FRAGMENT, true),
-                dimensions_buffer.layout(1, wgpu::ShaderStages::FRAGMENT),
-            ],
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("render_pl"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("render_bg"),
-            layout: &bind_group_layout,
-            entries: &[
-                path_tracer.target_buffer_binding(0),
-                dimensions_buffer.binding(1),
-            ],
-        });
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("render_pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                buffers: &[],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-                polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
-                unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-        });
-
+        path_tracer.set_resolution(size.width, size.height);
         path_tracer.set_flip_y(true);
         path_tracer.set_depth(DEPTH);
         path_tracer.set_iterations(ITERATIONS);
@@ -230,9 +163,9 @@ impl State {
             queue,
             config,
             size,
-            render_pipeline,
-            bind_group,
-            _dimensions_buffer: dimensions_buffer,
+            shader_module,
+            render_pipeline: OnceCell::new(),
+            dimensions_buffer,
         }
     }
 
@@ -249,6 +182,19 @@ impl State {
             // bug in wgpu with DX12 backend
             // we have to call device.poo(wait)
             self.device.poll(wgpu::Maintain::Wait);
+            self.queue.write_buffer(
+                &self.dimensions_buffer.handle,
+                0,
+                bytemuck::cast_slice(&[new_size.width, new_size.height]),
+            );
+
+            self.render_pipeline = OnceCell::new();
+            self.path_tracer
+                .set_resolution(new_size.width, new_size.height);
+            self.path_tracer
+                .scene
+                .camera
+                .set_aspect_ratio(new_size.width as f32 / new_size.height as f32);
             self.surface.configure(&self.device, &self.config);
         }
     }
@@ -260,6 +206,87 @@ impl State {
     fn update(&mut self) {
         self.camera_controller
             .update_camera(&mut self.path_tracer.scene.camera);
+    }
+
+    fn get_or_create_pipline(&self) -> &WgpuRenderPipeline {
+        self.render_pipeline.get_or_init(|| {
+            let bind_group_layout =
+                self.device
+                    .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                        label: Some("render_bgl"),
+                        entries: &[
+                            self.path_tracer.target_buffer_layout(
+                                0,
+                                wgpu::ShaderStages::FRAGMENT,
+                                true,
+                            ),
+                            self.dimensions_buffer
+                                .layout(1, wgpu::ShaderStages::FRAGMENT),
+                        ],
+                    });
+
+            let pipeline_layout =
+                self.device
+                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("render_pl"),
+                        bind_group_layouts: &[&bind_group_layout],
+                        push_constant_ranges: &[],
+                    });
+
+            let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("render_bg"),
+                layout: &bind_group_layout,
+                entries: &[
+                    self.path_tracer.target_buffer_binding(0),
+                    self.dimensions_buffer.binding(1),
+                ],
+            });
+
+            let pipeline = self
+                .device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("render_pipeline"),
+                    layout: Some(&pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &self.shader_module,
+                        entry_point: "vs_main",
+                        buffers: &[],
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &self.shader_module,
+                        entry_point: "fs_main",
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: self.config.format,
+                            blend: Some(wgpu::BlendState::REPLACE),
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                    }),
+                    primitive: wgpu::PrimitiveState {
+                        topology: wgpu::PrimitiveTopology::TriangleList,
+                        strip_index_format: None,
+                        front_face: wgpu::FrontFace::Ccw,
+                        cull_mode: Some(wgpu::Face::Back),
+                        // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                        polygon_mode: wgpu::PolygonMode::Fill,
+                        // Requires Features::DEPTH_CLIP_CONTROL
+                        unclipped_depth: false,
+                        // Requires Features::CONSERVATIVE_RASTERIZATION
+                        conservative: false,
+                    },
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState {
+                        count: 1,
+                        mask: !0,
+                        alpha_to_coverage_enabled: false,
+                    },
+                    multiview: None,
+                });
+
+            WgpuRenderPipeline {
+                pipeline,
+                bind_group,
+            }
+        })
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -292,9 +319,9 @@ impl State {
             })],
             depth_stencil_attachment: None,
         });
-
-        render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_bind_group(0, &self.bind_group, &[]);
+        let pipeline = self.get_or_create_pipline();
+        render_pass.set_pipeline(&pipeline.pipeline);
+        render_pass.set_bind_group(0, &pipeline.bind_group, &[]);
         render_pass.draw(0..3, 0..1);
         drop(render_pass);
 
@@ -311,6 +338,11 @@ struct WgpuContext {
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
+}
+
+struct WgpuRenderPipeline {
+    pipeline: wgpu::RenderPipeline,
+    bind_group: wgpu::BindGroup,
 }
 
 async fn request_wgpu_context_with_backend(
