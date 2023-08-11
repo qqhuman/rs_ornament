@@ -8,10 +8,11 @@ struct HitRecord {
 }
 
 fn hit_record_set_face_normal(hit: ptr<function, HitRecord>, ray: Ray, outward_normal: vec3<f32>) {
-    (*hit).front_face = dot(ray.direction, outward_normal) < 0.0;
-    if (*hit).front_face {
-        (*hit).normal = outward_normal;
-    } else {
+    if dot(ray.direction, outward_normal) > 0.0 {
         (*hit).normal = -outward_normal;
+        (*hit).front_face = false;
+    } else {
+        (*hit).normal = outward_normal;
+        (*hit).front_face = true;
     }
 }

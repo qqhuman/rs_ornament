@@ -16,7 +16,7 @@ const max_bvh_depth = 64;
 var<private> node_stack: array<u32, max_bvh_depth>;
 
 fn bvh_hit(not_transformed_ray: Ray, hit: ptr<function, HitRecord>) -> bool {
-    let t_min = 0.001;
+    let t_min = constant_state.ray_cast_epsilon;
     var t_max = 100000.0;
     
     let num_nodes = arrayLength(&bvh_nodes);
@@ -199,10 +199,6 @@ fn triangle_hit(r: Ray, v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>, t_min: f32,
 
     let s1 = cross(r.direction, e2);
     let determinant = dot(s1, e1);
-    if determinant < epsilon {
-        return t_max;
-    }
-
     let invd = 1.0 / determinant;
 
     let d = r.origin - v1;

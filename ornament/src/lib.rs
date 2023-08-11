@@ -5,7 +5,7 @@ use std::{
     sync::Mutex,
 };
 
-use cgmath::{Array, EuclideanSpace, InnerSpace};
+use cgmath::{Array, EuclideanSpace, InnerSpace, Rotation};
 use math::{degrees_to_radians, point3_max, point3_min, Aabb};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -209,6 +209,14 @@ impl Context {
         self.state.get_resolution()
     }
 
+    pub fn set_ray_cast_epsilon(&mut self, ray_cast_epsilon: f32) {
+        self.state.set_ray_cast_epsilon(ray_cast_epsilon);
+    }
+
+    pub fn get_ray_cast_epsilon(&self) -> f32 {
+        self.state.get_ray_cast_epsilon()
+    }
+
     pub fn render(&mut self) {
         if self.state.iterations > 1 {
             for _ in 0..self.state.iterations {
@@ -230,6 +238,7 @@ struct State {
     flip_y: bool,
     inverted_gamma: f32,
     iterations: u32,
+    ray_cast_epsilon: f32,
     dirty: bool,
 }
 
@@ -242,6 +251,7 @@ impl State {
             flip_y: false,
             inverted_gamma: 1.0,
             iterations: 1,
+            ray_cast_epsilon: 0.001,
             dirty: true,
         }
     }
@@ -279,6 +289,7 @@ impl State {
 
     pub fn set_iterations(&mut self, iterations: u32) {
         self.iterations = iterations;
+        self.make_dirty();
     }
 
     pub fn get_iterations(&self) -> u32 {
@@ -293,6 +304,15 @@ impl State {
 
     pub fn get_resolution(&self) -> (u32, u32) {
         (self.width, self.height)
+    }
+
+    pub fn set_ray_cast_epsilon(&mut self, ray_cast_epsilon: f32) {
+        self.ray_cast_epsilon = ray_cast_epsilon;
+        self.make_dirty();
+    }
+
+    pub fn get_ray_cast_epsilon(&self) -> f32 {
+        self.ray_cast_epsilon
     }
 }
 
@@ -517,6 +537,34 @@ impl Mesh {
         }
     }
 
+    pub fn plane(
+        center: cgmath::Point3<f32>,
+        side_length: f32,
+        normal: cgmath::Vector3<f32>,
+        material: RcCell<Material>,
+    ) -> Mesh {
+        let vertices = vec![
+            cgmath::Point3::new(-0.5, 0.0, -0.5),
+            cgmath::Point3::new(-0.5, 0.0, 0.5),
+            cgmath::Point3::new(0.5, 0.0, 0.5),
+            cgmath::Point3::new(0.5, 0.0, -0.5),
+        ];
+        let unit_y = cgmath::Vector3::unit_y();
+        let indices = vec![3, 1, 0, 2, 1, 3];
+        let rotation: cgmath::Matrix4<f32> =
+            cgmath::Quaternion::between_vectors(normal, unit_y).into();
+        Mesh::new(
+            vertices,
+            indices.clone(),
+            std::iter::repeat(unit_y).take(4).collect(),
+            indices,
+            cgmath::Matrix4::from_translation(center.to_vec())
+                * rotation
+                * cgmath::Matrix4::from_scale(side_length),
+            material,
+        )
+    }
+
     pub fn sphere(center: cgmath::Point3<f32>, radius: f32, material: RcCell<Material>) -> Mesh {
         let mut vertices = vec![];
         let mut normals = vec![];
@@ -618,6 +666,7 @@ enum MaterialType {
     Lambertian = 0,
     Metal = 1,
     Dielectric = 2,
+    DiffuseLight = 3,
 }
 
 pub struct Material {
@@ -658,6 +707,17 @@ impl Material {
 
             albedo: cgmath::Point3::from_value(0.0),
             fuzz: 0.0,
+            material_index: None,
+        }))
+    }
+
+    pub fn diffuse_light(albedo: Color) -> RcCell<Material> {
+        Rc::new(RefCell::new(Material {
+            albedo,
+            material_type: MaterialType::DiffuseLight as u32,
+
+            fuzz: 0.0,
+            ior: 0.0,
             material_index: None,
         }))
     }

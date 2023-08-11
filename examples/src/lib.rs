@@ -473,6 +473,96 @@ pub fn random_scene_with_3_statuette(aspect_ratio: f32) -> Scene {
     scene
 }
 
+fn quad_center_from_book(
+    q: cgmath::Point3<f32>,
+    u: cgmath::Vector3<f32>,
+    v: cgmath::Vector3<f32>,
+) -> cgmath::Point3<f32> {
+    let u = u * 0.5;
+    let v = v * 0.5;
+    q + u + v
+}
+
+pub fn quads(aspect_ratio: f32) -> Scene {
+    let vfov = 80.0;
+    let lookfrom = cgmath::Point3::new(0.0, 0.0, 9.0);
+    let lookat = cgmath::Point3::new(0.0, 0.0, 0.0);
+    let vup = cgmath::Vector3::new(0.0, 1.0, 0.0);
+    let aperture = 0.0;
+    let focus_dist = 10.0;
+    let camera = Camera::new(
+        lookfrom,
+        lookat,
+        vup,
+        aspect_ratio,
+        vfov,
+        aperture,
+        focus_dist,
+    );
+
+    let mut scene = Scene::new(camera);
+
+    let left_red = Material::lambertian(Color::new(1.0, 0.2, 0.2));
+    let back_green = Material::lambertian(Color::new(0.2, 1.0, 0.2));
+    let right_blue = Material::lambertian(Color::new(0.2, 0.2, 1.0));
+    let upper_orange = Material::lambertian(Color::new(1.0, 0.5, 0.0));
+    let lower_teal = Material::lambertian(Color::new(0.2, 0.8, 0.8));
+
+    scene.add_mesh(Mesh::plane(
+        quad_center_from_book(
+            cgmath::Point3::new(-3.0, -2.0, 5.0),
+            cgmath::Vector3::new(0.0, 0.0, -4.0),
+            cgmath::Vector3::new(0.0, 4.0, 0.0),
+        ),
+        4.0,
+        cgmath::Vector3::unit_x(),
+        left_red,
+    ));
+    scene.add_mesh(Mesh::plane(
+        quad_center_from_book(
+            cgmath::Point3::new(-2.0, -2.0, 0.0),
+            cgmath::Vector3::new(4.0, 0.0, 0.0),
+            cgmath::Vector3::new(0.0, 4.0, 0.0),
+        ),
+        4.0,
+        cgmath::Vector3::unit_z(),
+        back_green,
+    ));
+    scene.add_mesh(Mesh::plane(
+        quad_center_from_book(
+            cgmath::Point3::new(3.0, -2.0, 1.0),
+            cgmath::Vector3::new(0.0, 0.0, 4.0),
+            cgmath::Vector3::new(0.0, 4.0, 0.0),
+        ),
+        4.0,
+        -cgmath::Vector3::unit_x(),
+        right_blue,
+    ));
+    scene.add_mesh(Mesh::plane(
+        quad_center_from_book(
+            cgmath::Point3::new(-2.0, 3.0, 1.0),
+            cgmath::Vector3::new(4.0, 0.0, 0.0),
+            cgmath::Vector3::new(0.0, 0.0, 4.0),
+        ),
+        4.0,
+        -cgmath::Vector3::unit_y(),
+        upper_orange,
+    ));
+
+    scene.add_mesh(Mesh::plane(
+        quad_center_from_book(
+            cgmath::Point3::new(-2.0, -3.0, 5.0),
+            cgmath::Vector3::new(4.0, 0.0, 0.0),
+            cgmath::Vector3::new(0.0, 0.0, -4.0),
+        ),
+        4.0,
+        cgmath::Vector3::unit_y(),
+        lower_teal,
+    ));
+
+    scene
+}
+
 pub fn dielectric_test(aspect_ratio: f32) -> Scene {
     let vfov = 90.0;
     let lookfrom = cgmath::Point3::new(0.0, 0.0, 0.0);

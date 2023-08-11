@@ -11,7 +11,7 @@ use winit::{
 
 use crate::controllers;
 
-const WIDTH: u32 = 1920;
+const WIDTH: u32 = 1080;
 const HEIGHT: u32 = 1080;
 const RESIZABLE: bool = true;
 const DEPTH: u32 = 10;
@@ -29,7 +29,7 @@ pub async fn run() {
         .with_resizable(RESIZABLE)
         .build(&event_loop)
         .unwrap();
-    let scene = examples::random_scene_spheres(WIDTH as f32 / HEIGHT as f32);
+    let scene = examples::quads(WIDTH as f32 / HEIGHT as f32);
 
     let mut state = State::new(window, scene).await;
     let mut fps_counter = FpsCounter::new();

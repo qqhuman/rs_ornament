@@ -72,7 +72,7 @@ pub(super) struct ConstantState {
     height: u32,
     flip_y: u32,
     inverted_gamma: f32,
-    _padding: u32,
+    ray_cast_epsilon: f32,
 }
 
 impl ConstantState {
@@ -83,7 +83,7 @@ impl ConstantState {
             height: state.height,
             flip_y: if state.flip_y { 1 } else { 0 },
             inverted_gamma: state.inverted_gamma,
-            ..Default::default()
+            ray_cast_epsilon: state.ray_cast_epsilon,
         }
     }
 }
