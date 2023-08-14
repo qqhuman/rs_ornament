@@ -560,6 +560,103 @@ pub fn quads(aspect_ratio: f32) -> Scene {
         lower_teal,
     ));
 
+    scene.add_mesh(Mesh::sphere(
+        cgmath::Point3::new(0.0, 0.0, 3.0),
+        1.0,
+        Material::diffuse_light(Color::new(3.0, 3.0, 3.0)),
+    ));
+
+    scene
+}
+
+pub fn cornell_box(aspect_ratio: f32) -> Scene {
+    let vfov = 40.0;
+    let lookfrom = cgmath::Point3::new(278.0, 278.0, -800.0);
+    let lookat = cgmath::Point3::new(278.0, 278.0, 0.0);
+    let vup = cgmath::Vector3::new(0.0, 1.0, 0.0);
+    let aperture = 0.0;
+    let focus_dist = 10.0;
+    let camera = Camera::new(
+        lookfrom,
+        lookat,
+        vup,
+        aspect_ratio,
+        vfov,
+        aperture,
+        focus_dist,
+    );
+
+    let mut scene = Scene::new(camera);
+
+    let red = Material::lambertian(Color::new(0.65, 0.05, 0.05));
+    let white = Material::lambertian(Color::new(0.73, 0.73, 0.73));
+    let green = Material::lambertian(Color::new(0.12, 0.45, 0.15));
+    let light = Material::diffuse_light(Color::new(15.0, 15.0, 15.0));
+
+    scene.add_mesh(Mesh::plane(
+        quad_center_from_book(
+            cgmath::Point3::new(555.0, 0.0, 0.0),
+            cgmath::Vector3::new(0.0, 555.0, 0.0),
+            cgmath::Vector3::new(0.0, 0.0, 555.0),
+        ),
+        555.0,
+        cgmath::Vector3::unit_x(),
+        green,
+    ));
+    scene.add_mesh(Mesh::plane(
+        quad_center_from_book(
+            cgmath::Point3::new(0.0, 0.0, 0.0),
+            cgmath::Vector3::new(0.0, 555.0, 0.0),
+            cgmath::Vector3::new(0.0, 0.0, 555.0),
+        ),
+        555.0,
+        -cgmath::Vector3::unit_x(),
+        red,
+    ));
+    // ??????????????????????? not a square
+    scene.add_mesh(Mesh::plane(
+        quad_center_from_book(
+            cgmath::Point3::new(343.0, 554.0, 332.0),
+            cgmath::Vector3::new(-130.0, 0.0, 0.0),
+            cgmath::Vector3::new(0.0, 0.0, -105.0),
+        ),
+        105.0,
+        -cgmath::Vector3::unit_y(),
+        light,
+    ));
+    scene.add_mesh(Mesh::plane(
+        quad_center_from_book(
+            cgmath::Point3::new(0.0, 0.0, 0.0),
+            cgmath::Vector3::new(555.0, 0.0, 0.0),
+            cgmath::Vector3::new(0.0, 0.0, 555.0),
+        ),
+        555.0,
+        cgmath::Vector3::unit_y(),
+        white.clone(),
+    ));
+
+    scene.add_mesh(Mesh::plane(
+        quad_center_from_book(
+            cgmath::Point3::new(555.0, 555.0, 555.0),
+            cgmath::Vector3::new(-555.0, 0.0, 0.0),
+            cgmath::Vector3::new(0.0, 0.0, -555.0),
+        ),
+        555.0,
+        -cgmath::Vector3::unit_y(),
+        white.clone(),
+    ));
+
+    scene.add_mesh(Mesh::plane(
+        quad_center_from_book(
+            cgmath::Point3::new(0.0, 0.0, 555.0),
+            cgmath::Vector3::new(555.0, 0.0, 0.0),
+            cgmath::Vector3::new(0.0, 555.0, 0.0),
+        ),
+        555.0,
+        cgmath::Vector3::unit_z(),
+        white,
+    ));
+
     scene
 }
 

@@ -62,7 +62,6 @@ fn render(inv_id_x: u32, xy: vec2<u32>) -> vec4<f32> {
     // var accumulated_rgba = vec4<f32>(rgb, 1.0);
     let r = camera_get_ray(u, v);
     var rgb = ray_color(r);
-    rgb = clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0));
     var accumulated_rgba = vec4<f32>(rgb, 1.0);
     
     if dynamic_state.current_iteration > 1.0 {
@@ -74,6 +73,7 @@ fn render(inv_id_x: u32, xy: vec2<u32>) -> vec4<f32> {
 
 fn post_processing(inv_id_x: u32, xy: vec2<u32>, accumulated_rgba: vec4<f32>) {
     var rgba = accumulated_rgba / dynamic_state.current_iteration;
+    rgba = clamp(rgba, vec4<f32>(0.0), vec4<f32>(1.0));
     rgba.x = pow(rgba.x, constant_state.inverted_gamma);
     rgba.y = pow(rgba.y, constant_state.inverted_gamma);
     rgba.z = pow(rgba.z, constant_state.inverted_gamma);
@@ -87,32 +87,29 @@ fn post_processing(inv_id_x: u32, xy: vec2<u32>, accumulated_rgba: vec4<f32>) {
 
 fn ray_color(ray: Ray) -> vec3<f32> {
     var current_ray = ray;
-    var throughout = vec3<f32>(1.0);
-    var color = vec3<f32>(0.0);
+    var final_color = vec3<f32>(1.0);
     var scattered = Ray();
 
     for (var i = 0u; i < constant_state.depth; i = i + 1u) {
         var rec = HitRecord();
-        if bvh_hit(current_ray, &rec) {
-            var attenuation = vec3<f32>(0.0);
-            rec.normal = normalize(rec.normal);
-            if material_scatter(current_ray, rec, &attenuation, &scattered) {
-                current_ray = scattered;
-                throughout *= attenuation;
-                if all(throughout < 0.0001) {
-                    break;
-                }
-            } else {
-                throughout = vec3<f32>(0.0);
-                break;
-            }
+        if !bvh_hit(current_ray, &rec) {
+            // var unit_direction = normalize(current_ray.direction);
+            // var t = 0.5 * (unit_direction.y + 1.0);
+            // final_color *= (1.0 - t) * vec3<f32>(1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
+            final_color = vec3<f32>(0.0);
+            break;
+        }
+
+        var attenuation = vec3<f32>(0.0);
+        rec.normal = normalize(rec.normal);
+        if material_scatter(current_ray, rec, &attenuation, &scattered) {
+            current_ray = scattered;
+            final_color *= attenuation;
         } else {
-            var unit_direction = normalize(current_ray.direction);
-            var t = 0.5 * (unit_direction.y + 1.0);
-            color = (1.0 - t) * vec3<f32>(1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
+            final_color *= material_emit(rec);
             break;
         }
     }
 
-    return throughout * color;
+    return final_color;
 }

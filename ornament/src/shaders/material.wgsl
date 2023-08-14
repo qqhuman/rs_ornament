@@ -74,3 +74,15 @@ fn material_scatter(r_in: Ray, rec: HitRecord, attenuation: ptr<function, vec3<f
         }
     }
 }
+
+fn material_emit(rec: HitRecord) -> vec3<f32> {
+    let material = materials[rec.material_index];
+    switch material.material_type {
+        case 3u {
+            return material.albedo;
+        }
+        default {
+            return vec3<f32>(0.0);
+        }
+    }
+}

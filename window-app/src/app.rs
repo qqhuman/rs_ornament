@@ -29,7 +29,7 @@ pub async fn run() {
         .with_resizable(RESIZABLE)
         .build(&event_loop)
         .unwrap();
-    let scene = examples::quads(WIDTH as f32 / HEIGHT as f32);
+    let scene = examples::cornell_box(WIDTH as f32 / HEIGHT as f32);
 
     let mut state = State::new(window, scene).await;
     let mut fps_counter = FpsCounter::new();
