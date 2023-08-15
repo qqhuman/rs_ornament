@@ -515,6 +515,7 @@ pub fn quads(aspect_ratio: f32) -> Scene {
             cgmath::Vector3::new(0.0, 4.0, 0.0),
         ),
         4.0,
+        4.0,
         cgmath::Vector3::unit_x(),
         left_red,
     ));
@@ -524,6 +525,7 @@ pub fn quads(aspect_ratio: f32) -> Scene {
             cgmath::Vector3::new(4.0, 0.0, 0.0),
             cgmath::Vector3::new(0.0, 4.0, 0.0),
         ),
+        4.0,
         4.0,
         cgmath::Vector3::unit_z(),
         back_green,
@@ -535,6 +537,7 @@ pub fn quads(aspect_ratio: f32) -> Scene {
             cgmath::Vector3::new(0.0, 4.0, 0.0),
         ),
         4.0,
+        4.0,
         -cgmath::Vector3::unit_x(),
         right_blue,
     ));
@@ -544,6 +547,7 @@ pub fn quads(aspect_ratio: f32) -> Scene {
             cgmath::Vector3::new(4.0, 0.0, 0.0),
             cgmath::Vector3::new(0.0, 0.0, 4.0),
         ),
+        4.0,
         4.0,
         -cgmath::Vector3::unit_y(),
         upper_orange,
@@ -555,6 +559,7 @@ pub fn quads(aspect_ratio: f32) -> Scene {
             cgmath::Vector3::new(4.0, 0.0, 0.0),
             cgmath::Vector3::new(0.0, 0.0, -4.0),
         ),
+        4.0,
         4.0,
         cgmath::Vector3::unit_y(),
         lower_teal,
@@ -569,7 +574,7 @@ pub fn quads(aspect_ratio: f32) -> Scene {
     scene
 }
 
-pub fn cornell_box(aspect_ratio: f32) -> Scene {
+pub fn empty_cornell_box(aspect_ratio: f32) -> Scene {
     let vfov = 40.0;
     let lookfrom = cgmath::Point3::new(278.0, 278.0, -800.0);
     let lookat = cgmath::Point3::new(278.0, 278.0, 0.0);
@@ -600,6 +605,7 @@ pub fn cornell_box(aspect_ratio: f32) -> Scene {
             cgmath::Vector3::new(0.0, 0.0, 555.0),
         ),
         555.0,
+        555.0,
         cgmath::Vector3::unit_x(),
         green,
     ));
@@ -609,6 +615,7 @@ pub fn cornell_box(aspect_ratio: f32) -> Scene {
             cgmath::Vector3::new(0.0, 555.0, 0.0),
             cgmath::Vector3::new(0.0, 0.0, 555.0),
         ),
+        555.0,
         555.0,
         -cgmath::Vector3::unit_x(),
         red,
@@ -620,6 +627,7 @@ pub fn cornell_box(aspect_ratio: f32) -> Scene {
             cgmath::Vector3::new(-130.0, 0.0, 0.0),
             cgmath::Vector3::new(0.0, 0.0, -105.0),
         ),
+        130.0,
         105.0,
         -cgmath::Vector3::unit_y(),
         light,
@@ -630,6 +638,7 @@ pub fn cornell_box(aspect_ratio: f32) -> Scene {
             cgmath::Vector3::new(555.0, 0.0, 0.0),
             cgmath::Vector3::new(0.0, 0.0, 555.0),
         ),
+        555.0,
         555.0,
         cgmath::Vector3::unit_y(),
         white.clone(),
@@ -642,6 +651,7 @@ pub fn cornell_box(aspect_ratio: f32) -> Scene {
             cgmath::Vector3::new(0.0, 0.0, -555.0),
         ),
         555.0,
+        555.0,
         -cgmath::Vector3::unit_y(),
         white.clone(),
     ));
@@ -653,8 +663,69 @@ pub fn cornell_box(aspect_ratio: f32) -> Scene {
             cgmath::Vector3::new(0.0, 555.0, 0.0),
         ),
         555.0,
+        555.0,
         cgmath::Vector3::unit_z(),
         white,
+    ));
+
+    scene
+}
+
+pub fn cornell_box_with_lucy(aspect_ratio: f32) -> Scene {
+    let mut scene = empty_cornell_box(aspect_ratio);
+
+    let height = 400.0;
+    let mesh = scene.add_mesh(
+        load::obj::mesh(
+            "examples/models/lucy.obj",
+            cgmath::Matrix4::from_translation(cgmath::Vector3::new(
+                265.0 * 1.5,
+                height / 2.0,
+                295.0,
+            )) * cgmath::Matrix4::from_angle_y(cgmath::Rad(std::f32::consts::PI * 1.5))
+                * cgmath::Matrix4::from_scale(height),
+            Material::lambertian(Color::new(0.4, 0.2, 0.1)),
+        )
+        .unwrap(),
+    );
+
+    let height = 200.0;
+    scene.add_mesh_instances(MeshInstance::new(
+        mesh,
+        Material::lambertian(Color::new(0.4, 0.2, 0.1)),
+        cgmath::Matrix4::from_translation(cgmath::Vector3::new(130.0 * 1.5, height / 2.0, 65.0))
+            * cgmath::Matrix4::from_angle_y(cgmath::Rad(std::f32::consts::PI * 1.25))
+            * cgmath::Matrix4::from_scale(height),
+    ));
+
+    scene
+}
+
+pub fn cornell_box_with_statuette(aspect_ratio: f32) -> Scene {
+    let mut scene = empty_cornell_box(aspect_ratio);
+
+    let height = 400.0;
+    let mesh = scene.add_mesh(
+        load::assimp::mesh(
+            "examples/models/xyzrgb_statuette.ply",
+            cgmath::Matrix4::from_translation(cgmath::Vector3::new(
+                265.0 * 1.5,
+                height / 2.0,
+                295.0,
+            )) * cgmath::Matrix4::from_angle_y(cgmath::Rad(std::f32::consts::PI * 1.5))
+                * cgmath::Matrix4::from_scale(height),
+            Material::lambertian(Color::new(0.4, 0.2, 0.1)),
+        )
+        .unwrap(),
+    );
+
+    let height = 200.0;
+    scene.add_mesh_instances(MeshInstance::new(
+        mesh,
+        Material::lambertian(Color::new(0.4, 0.2, 0.1)),
+        cgmath::Matrix4::from_translation(cgmath::Vector3::new(130.0 * 1.5, height / 2.0, 65.0))
+            * cgmath::Matrix4::from_angle_y(cgmath::Rad(std::f32::consts::PI * 1.25))
+            * cgmath::Matrix4::from_scale(height),
     ));
 
     scene

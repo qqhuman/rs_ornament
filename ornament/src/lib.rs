@@ -539,7 +539,8 @@ impl Mesh {
 
     pub fn plane(
         center: cgmath::Point3<f32>,
-        side_length: f32,
+        side1_length: f32,
+        side2_length: f32,
         normal: cgmath::Vector3<f32>,
         material: RcCell<Material>,
     ) -> Mesh {
@@ -560,7 +561,7 @@ impl Mesh {
             indices,
             cgmath::Matrix4::from_translation(center.to_vec())
                 * rotation
-                * cgmath::Matrix4::from_scale(side_length),
+                * cgmath::Matrix4::from_nonuniform_scale(side1_length, 1.0, side2_length),
             material,
         )
     }
