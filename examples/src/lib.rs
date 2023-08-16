@@ -701,6 +701,7 @@ pub fn cornell_box_with_lucy(aspect_ratio: f32) -> Scene {
     scene
 }
 
+#[cfg(target_os = "windows")]
 pub fn cornell_box_with_statuette(aspect_ratio: f32) -> Scene {
     let mut scene = empty_cornell_box(aspect_ratio);
 
