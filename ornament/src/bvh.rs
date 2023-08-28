@@ -1,4 +1,4 @@
-use std::{cell::Ref, cmp::Ordering, collections::HashMap};
+use std::{cmp::Ordering, collections::HashMap};
 
 use cgmath::Transform;
 use rand::Rng;
@@ -87,7 +87,10 @@ fn build_bvh_recursive<'a>(
                     left_aabb_min_or_v0: mesh.aabb.min.into(),
                     left_aabb_max_or_v1: mesh.aabb.max.into(),
                     left_or_custom_id: mesh_top_id as u32,
-                    right_or_material_index: get_material_index(bvh_tree, mesh.material.borrow()),
+                    right_or_material_index: get_material_index(
+                        bvh_tree,
+                        &mut mesh.material,
+                    ),
                     node_type: mesh.bvh_node_type(),
                     transform_id: transform_id as u32,
 
@@ -96,7 +99,7 @@ fn build_bvh_recursive<'a>(
             }
             Leaf::MeshInstance(instance) => {
                 instances_to_resolve.insert(bvh_tree.nodes.len() as u32, instance.clone());
-                let instance = instance.borrow();
+                let mut instance = instance.borrow_mut();
                 let transform = instance.transform;
                 let inverse_transform = transform.inverse_transform().ok_or(Error::BuildBvh)?;
                 bvh_tree.transforms.push(inverse_transform.into());
@@ -107,7 +110,7 @@ fn build_bvh_recursive<'a>(
                     left_aabb_max_or_v1: instance.aabb.max.into(),
                     right_or_material_index: get_material_index(
                         bvh_tree,
-                        instance.material.borrow(),
+                        &mut instance.material,
                     ),
                     node_type: instance.bvh_node_type(),
                     transform_id: transform_id as u32,
@@ -116,7 +119,7 @@ fn build_bvh_recursive<'a>(
                 }
             }
             Leaf::Sphere(sphere) => {
-                let sphere = sphere.borrow();
+                let mut sphere = sphere.borrow_mut();
                 let transform = sphere.transform;
                 let inverse_transform = transform.inverse_transform().ok_or(Error::BuildBvh)?;
                 bvh_tree.transforms.push(inverse_transform.into());
@@ -125,7 +128,10 @@ fn build_bvh_recursive<'a>(
                 Node {
                     left_aabb_min_or_v0: sphere.aabb.min.into(),
                     left_aabb_max_or_v1: sphere.aabb.max.into(),
-                    right_or_material_index: get_material_index(bvh_tree, sphere.material.borrow()),
+                    right_or_material_index: get_material_index(
+                        bvh_tree,
+                        &mut sphere.material,
+                    ),
                     node_type: sphere.bvh_node_type(),
                     transform_id: transform_id as u32,
 
@@ -186,16 +192,16 @@ fn build_bvh_recursive<'a>(
     Ok(node)
 }
 
-fn get_material_index(bvh_tree: &mut Tree, material: Ref<Material>) -> u32 {
-    match material.material_index {
-        Some(id) => id,
-        None => {
-            bvh_tree
-                .materials
-                .push(gpu_structs::Material::from(material));
-            return bvh_tree.materials.len() as u32 - 1;
-        }
+fn get_material_index(bvh_tree: &mut Tree, material: &mut RcCell<Material>) -> u32 {
+    if material.borrow().material_index.is_none() {
+        bvh_tree
+            .materials
+            .push(gpu_structs::Material::from(material.borrow()));
+        let mut material = material.borrow_mut();
+        material.material_index = Some(bvh_tree.materials.len() as u32 - 1);
     }
+
+    material.borrow().material_index.unwrap()
 }
 
 fn from_mesh(

@@ -23,6 +23,83 @@ pub fn length(v: cgmath::Vector3<f32>) -> f32 {
     f32::sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
 }
 
+pub fn random_scene_spheres(aspect_ratio: f32) -> Scene {
+    let vfov = 20.0;
+    let lookfrom = cgmath::Point3::new(13.0, 2.0, 3.0);
+    let lookat = cgmath::Point3::new(0.0, 0.0, 0.0);
+    let vup = cgmath::Vector3::new(0.0, 1.0, 0.0);
+    let aperture = 0.1;
+    let focus_dist = 10.0;
+    let camera = Camera::new(
+        lookfrom,
+        lookat,
+        vup,
+        aspect_ratio,
+        vfov,
+        aperture,
+        focus_dist,
+    );
+
+    let mut scene = Scene::new(camera);
+    let mut rng = rng();
+
+    scene.add_sphere(Sphere::new(
+        cgmath::Point3::new(0.0, -1000.0, 0.0),
+        1000.0,
+        Material::lambertian(Color::new(0.5, 0.5, 0.5)),
+    ));
+
+    for a in -11..11 {
+        for b in -11..11 {
+            let a = a as f32;
+            let b = b as f32;
+            let choose_mat: f32 = rng.gen();
+            let center =
+                cgmath::Point3::new(a + 0.9 * rng.gen::<f32>(), 0.2, b + 0.9 * rng.gen::<f32>());
+
+            if length(center - cgmath::Point3::new(4.0, 0.2, 0.0)) > 0.9 {
+                let material = if choose_mat < 0.8 {
+                    let color1 = random_color(&mut rng);
+                    let color2 = random_color(&mut rng);
+                    let albedo = Color::new(
+                        color1.x * color2.x,
+                        color1.y * color2.y,
+                        color1.z * color2.z,
+                    );
+                    Material::lambertian(albedo)
+                } else if choose_mat < 0.95 {
+                    let albedo = random_color_between(&mut rng, 0.5, 1.0);
+                    let fuzz = rng.gen_range(0.0..0.5);
+                    Material::metal(albedo, fuzz)
+                } else {
+                    Material::dielectric(1.5)
+                };
+                scene.add_sphere(Sphere::new(center, 0.2, material));
+            }
+        }
+    }
+
+    scene.add_sphere(Sphere::new(
+        cgmath::Point3::new(0.0, 1.0, 0.0),
+        1.0,
+        Material::dielectric(1.5),
+    ));
+
+    scene.add_sphere(Sphere::new(
+        cgmath::Point3::new(-4.0, 1.0, 0.0),
+        1.0,
+        Material::lambertian(Color::new(0.4, 0.2, 0.1)),
+    ));
+
+    scene.add_sphere(Sphere::new(
+        cgmath::Point3::new(4.0, 1.0, 0.0),
+        1.0,
+        Material::metal(Color::new(0.7, 0.6, 0.5), 0.0),
+    ));
+
+    scene
+}
+
 pub fn random_scene_mix_meshes_and_spheres(aspect_ratio: f32) -> Scene {
     let vfov = 20.0;
     let lookfrom = cgmath::Point3::new(13.0, 2.0, 3.0);
@@ -101,83 +178,6 @@ pub fn random_scene_mix_meshes_and_spheres(aspect_ratio: f32) -> Scene {
             }
         }
     }
-
-    scene
-}
-
-pub fn random_scene_spheres(aspect_ratio: f32) -> Scene {
-    let vfov = 20.0;
-    let lookfrom = cgmath::Point3::new(13.0, 2.0, 3.0);
-    let lookat = cgmath::Point3::new(0.0, 0.0, 0.0);
-    let vup = cgmath::Vector3::new(0.0, 1.0, 0.0);
-    let aperture = 0.1;
-    let focus_dist = 10.0;
-    let camera = Camera::new(
-        lookfrom,
-        lookat,
-        vup,
-        aspect_ratio,
-        vfov,
-        aperture,
-        focus_dist,
-    );
-
-    let mut scene = Scene::new(camera);
-    let mut rng = rng();
-
-    scene.add_sphere(Sphere::new(
-        cgmath::Point3::new(0.0, -1000.0, 0.0),
-        1000.0,
-        Material::lambertian(Color::new(0.5, 0.5, 0.5)),
-    ));
-
-    for a in -11..11 {
-        for b in -11..11 {
-            let a = a as f32;
-            let b = b as f32;
-            let choose_mat: f32 = rng.gen();
-            let center =
-                cgmath::Point3::new(a + 0.9 * rng.gen::<f32>(), 0.2, b + 0.9 * rng.gen::<f32>());
-
-            if length(center - cgmath::Point3::new(4.0, 0.2, 0.0)) > 0.9 {
-                let material = if choose_mat < 0.8 {
-                    let color1 = random_color(&mut rng);
-                    let color2 = random_color(&mut rng);
-                    let albedo = Color::new(
-                        color1.x * color2.x,
-                        color1.y * color2.y,
-                        color1.z * color2.z,
-                    );
-                    Material::lambertian(albedo)
-                } else if choose_mat < 0.95 {
-                    let albedo = random_color_between(&mut rng, 0.5, 1.0);
-                    let fuzz = rng.gen_range(0.0..0.5);
-                    Material::metal(albedo, fuzz)
-                } else {
-                    Material::dielectric(1.5)
-                };
-                scene.add_sphere(Sphere::new(center, 0.2, material));
-            }
-        }
-    }
-
-    scene.add_sphere(Sphere::new(
-        cgmath::Point3::new(0.0, 1.0, 0.0),
-        1.0,
-        Material::dielectric(1.5),
-    ));
-
-    scene.add_sphere(Sphere::new(
-        cgmath::Point3::new(-4.0, 1.0, 0.0),
-        1.0,
-        Material::lambertian(Color::new(0.4, 0.2, 0.1)),
-    ));
-
-    scene.add_sphere(Sphere::new(
-        cgmath::Point3::new(4.0, 1.0, 0.0),
-        1.0,
-        Material::metal(Color::new(0.7, 0.6, 0.5), 0.0),
-    ));
 
     scene
 }
