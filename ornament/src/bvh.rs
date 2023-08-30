@@ -18,11 +18,11 @@ pub struct Tree {
     pub materials: Vec<gpu_structs::Material>,
 }
 
-enum Leaf<'a> {
+enum Leaf {
     Sphere(RcCell<Sphere>),
     Mesh(RcCell<Mesh>),
     MeshInstance(RcCell<MeshInstance>),
-    Triangle(&'a Triangle),
+    Triangle(Triangle),
 }
 
 #[repr(C)]
@@ -210,7 +210,7 @@ fn from_mesh(
     instances_to_resolve: &mut HashMap<u32, RcCell<MeshInstance>>,
 ) -> Result<Node, Error> {
     let mesh = mesh.borrow_mut();
-    let mut triangles = vec![];
+    let mut leafs = vec![];
     for mesh_triangle_index in 0..mesh.vertex_indices.len() / 3 {
         let v0 = mesh.vertices[mesh.vertex_indices[mesh_triangle_index * 3] as usize];
         let v1 = mesh.vertices[mesh.vertex_indices[mesh_triangle_index * 3 + 1] as usize];
@@ -220,17 +220,14 @@ fn from_mesh(
             point3_max(point3_max(v0, v1), v2),
         );
         let global_triangle_index = bvh_tree.normal_indices.len() / 3 + mesh_triangle_index;
-        triangles.push(Triangle {
+        leafs.push(Leaf::Triangle(Triangle {
             v0,
             v1,
             v2,
             triangle_index: global_triangle_index as u32,
             aabb,
-        });
+        }));
     }
-
-    let mut leafs = vec![];
-    leafs.extend(triangles.iter().map(|t| Leaf::Triangle(t)));
 
     bvh_tree.normal_indices.extend(
         mesh.normal_indices
