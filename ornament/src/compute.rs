@@ -9,9 +9,9 @@ use super::State;
 pub const WORKGROUP_SIZE: u32 = 256;
 
 struct Pipelines {
-    render_pipeline: wgpu::ComputePipeline,
+    path_tracing_pipeline: wgpu::ComputePipeline,
     post_processing_pipeline: wgpu::ComputePipeline,
-    render_and_post_processing_pipeline: wgpu::ComputePipeline,
+    path_tracing_and_post_processing_pipeline: wgpu::ComputePipeline,
     bind_groups: Vec<wgpu::BindGroup>,
 }
 
@@ -336,10 +336,10 @@ impl Unit {
                         push_constant_ranges: &[],
                     });
 
-            let render_pipeline =
+            let path_tracing_pipeline =
                 self.device
                     .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                        label: Some("ornament_render_pipeline"),
+                        label: Some("ornament_path_tracing_pipeline"),
                         layout: Some(&pipeline_layout),
                         module: &self.shader_module,
                         entry_point: "main_render",
@@ -354,19 +354,19 @@ impl Unit {
                         entry_point: "main_post_processing",
                     });
 
-            let render_and_post_processing_pipeline =
+            let path_tracing_and_post_processing_pipeline =
                 self.device
                     .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                        label: Some("ornament_render_and_post_processing_pipeline"),
+                        label: Some("ornament_path_tracing_and_post_processing_pipeline"),
                         layout: Some(&pipeline_layout),
                         module: &self.shader_module,
                         entry_point: "main",
                     });
 
             Pipelines {
-                render_pipeline,
+                path_tracing_pipeline,
                 post_processing_pipeline,
-                render_and_post_processing_pipeline,
+                path_tracing_and_post_processing_pipeline,
                 bind_groups,
             }
         })
@@ -446,7 +446,7 @@ impl Unit {
         });
 
         let pipelines = self.get_or_create_pipelines();
-        pass.set_pipeline(&pipelines.render_pipeline);
+        pass.set_pipeline(&pipelines.path_tracing_pipeline);
         for (pos, bg) in pipelines.bind_groups.iter().enumerate() {
             pass.set_bind_group(pos as u32, bg, &[]);
         }
@@ -488,7 +488,7 @@ impl Unit {
         });
 
         let pipelines = self.get_or_create_pipelines();
-        pass.set_pipeline(&pipelines.render_and_post_processing_pipeline);
+        pass.set_pipeline(&pipelines.path_tracing_and_post_processing_pipeline);
         for (pos, bg) in pipelines.bind_groups.iter().enumerate() {
             pass.set_bind_group(pos as u32, bg, &[]);
         }

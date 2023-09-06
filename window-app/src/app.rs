@@ -11,8 +11,8 @@ use winit::{
 
 use crate::controllers;
 
-const WIDTH: u32 = 1080;
-const HEIGHT: u32 = 1080;
+const WIDTH: u32 = 1500;
+const HEIGHT: u32 = 1000;
 const RESIZABLE: bool = true;
 const DEPTH: u32 = 10;
 const ITERATIONS: u32 = 1;
@@ -29,7 +29,7 @@ pub async fn run() {
         .with_resizable(RESIZABLE)
         .build(&event_loop)
         .unwrap();
-    let scene = examples::cornell_box_with_lucy(WIDTH as f32 / HEIGHT as f32);
+    let scene = examples::random_scene_spheres(WIDTH as f32 / HEIGHT as f32);
 
     let mut state = State::new(window, scene).await;
     let mut fps_counter = FpsCounter::new();
@@ -62,7 +62,6 @@ pub async fn run() {
             }
         }
         Event::RedrawRequested(window_id) if window_id == state.window().id() => {
-            fps_counter.start_frame();
             state.update();
             match state.render() {
                 Ok(_) => {}
@@ -322,7 +321,7 @@ impl State {
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
-
+        
         Ok(())
     }
 }

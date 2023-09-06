@@ -24,7 +24,6 @@ impl Timer {
 
 pub struct FpsCounter {
     begin_frame: Instant,
-    delta_time: Duration,
     frames: u32,
 }
 
@@ -32,23 +31,18 @@ impl FpsCounter {
     pub fn new() -> Self {
         Self {
             begin_frame: Instant::now(),
-            delta_time: Duration::ZERO,
             frames: 0,
         }
     }
 
-    pub fn start_frame(&mut self) {
-        self.begin_frame = Instant::now();
-    }
-
     pub fn end_frames(&mut self, frames: u32) {
         self.frames += frames;
-        self.delta_time += self.begin_frame.elapsed();
-        if self.delta_time >= Duration::new(1, 0) {
-            let frames = self.frames as f64 / self.delta_time.as_secs_f64();
+        let delta_time = self.begin_frame.elapsed();
+        if delta_time >= Duration::new(1, 0) {
+            let frames = self.frames as f64 / delta_time.as_secs_f64();
             println!("FPS: {:?}", frames as u32);
             self.frames = 0;
-            self.delta_time = Duration::ZERO
+            self.begin_frame = Instant::now();
         }
     }
 }

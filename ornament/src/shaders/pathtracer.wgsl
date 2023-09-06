@@ -93,10 +93,10 @@ fn ray_color(ray: Ray) -> vec3<f32> {
     for (var i = 0u; i < constant_state.depth; i = i + 1u) {
         var rec = HitRecord();
         if !bvh_hit(current_ray, &rec) {
-            // var unit_direction = normalize(current_ray.direction);
-            // var t = 0.5 * (unit_direction.y + 1.0);
-            // final_color *= (1.0 - t) * vec3<f32>(1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
-            final_color = vec3<f32>(0.0);
+            var unit_direction = normalize(current_ray.direction);
+            var t = 0.5 * (unit_direction.y + 1.0);
+            final_color *= (1.0 - t) * vec3<f32>(1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
+            //final_color = vec3<f32>(0.0);
             break;
         }
 
