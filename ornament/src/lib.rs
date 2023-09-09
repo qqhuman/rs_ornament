@@ -511,13 +511,8 @@ impl Mesh {
             let v0 = vertices[vertex_indices[mesh_triangle_index * 3] as usize];
             let v1 = vertices[vertex_indices[mesh_triangle_index * 3 + 1] as usize];
             let v2 = vertices[vertex_indices[mesh_triangle_index * 3 + 2] as usize];
-            let aabb = Aabb::new(
-                point3_min(point3_min(v0, v1), v2),
-                point3_max(point3_max(v0, v1), v2),
-            );
-
-            min = point3_min(min, aabb.min);
-            max = point3_max(max, aabb.max);
+            min = point3_min(min, point3_min(point3_min(v0, v1), v2));
+            max = point3_max(max, point3_max(point3_max(v0, v1), v2));
         }
 
         let not_transformed_aabb = Aabb::new(min, max);

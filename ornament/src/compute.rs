@@ -673,7 +673,10 @@ impl TargetBuffer {
         });
 
         let pixels = width * height;
-        let workgroups = (pixels / WORKGROUP_SIZE) + (pixels % WORKGROUP_SIZE);
+        let mut workgroups = pixels / WORKGROUP_SIZE;
+        if pixels % WORKGROUP_SIZE > 0 {
+            workgroups += 1;
+        }
 
         Self {
             device,
